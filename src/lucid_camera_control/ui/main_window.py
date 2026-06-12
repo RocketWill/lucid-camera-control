@@ -4,22 +4,31 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QLabel,
     QMainWindow,
-    QPushButton,
+    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
 
-from lucid_camera_control.application.state import CameraState
+from lucid_camera_control.application.commands import (
+    CloseCamera,
+    ConnectCamera,
+    ExploreCameras,
+)
+from lucid_camera_control.application.controller import ApplicationController
+from lucid_camera_control.camera.arena_system import ArenaCameraSystem
+from lucid_camera_control.ui.camera_panel import CameraPanel
+from lucid_camera_control.ui.command_bridge import CommandBridge
 
 
 class MainWindow(QMainWindow):
     """Minimal shell expanded by later implementation tickets."""
 
-    def __init__(self) -> None:
+    def __init__(self, controller: ApplicationController | None = None) -> None:
         super().__init__()
+        self.controller = controller or ApplicationController(ArenaCameraSystem())
+        self.bridge = CommandBridge(self.controller)
         self.setWindowTitle("LUCID Camera Control")
         self.resize(1100, 720)
 
@@ -27,16 +36,16 @@ class MainWindow(QMainWindow):
         title.setObjectName("titleLabel")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.status_label = QLabel(CameraState.DISCONNECTED.value)
-        self.status_label.setObjectName("cameraStateLabel")
+        self.camera_panel = CameraPanel()
+        self.status_label = self.camera_panel.status_label
+        self.explore_button = self.camera_panel.explore_button
 
-        self.explore_button = QPushButton("Explore Cameras")
-        self.explore_button.setObjectName("exploreCamerasButton")
-
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(self.status_label)
-        toolbar.addStretch(1)
-        toolbar.addWidget(self.explore_button)
+        self.camera_panel.explore_button.clicked.connect(self._explore)
+        self.camera_panel.connect_button.clicked.connect(self._connect)
+        self.camera_panel.close_button.clicked.connect(self._close_camera)
+        self.bridge.snapshot_changed.connect(self._on_snapshot)
+        self.bridge.busy_changed.connect(self.camera_panel.set_busy)
+        self.bridge.command_failed.connect(self._show_error)
 
         placeholder = QLabel("Connect a camera to begin.")
         placeholder.setObjectName("previewPlaceholder")
@@ -45,10 +54,26 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout()
         layout.addWidget(title)
-        layout.addLayout(toolbar)
+        layout.addWidget(self.camera_panel)
         layout.addWidget(placeholder, stretch=1)
 
         central = QWidget()
         central.setLayout(layout)
         self.setCentralWidget(central)
 
+    def _explore(self) -> None:
+        self.bridge.execute(ExploreCameras())
+
+    def _connect(self) -> None:
+        serial = self.camera_panel.selected_serial
+        if serial:
+            self.bridge.execute(ConnectCamera(serial))
+
+    def _close_camera(self) -> None:
+        self.bridge.execute(CloseCamera())
+
+    def _on_snapshot(self, snapshot: object) -> None:
+        self.camera_panel.apply_snapshot(snapshot, self.bridge.busy)
+
+    def _show_error(self, message: str) -> None:
+        QMessageBox.critical(self, "Camera operation failed", message)
