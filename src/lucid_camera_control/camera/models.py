@@ -15,6 +15,7 @@ class CameraDescriptor:
     user_defined_name: str | None = None
     ip_address: str | None = None
     mac_address: str | None = None
+    firmware_version: str | None = None
 
     @property
     def display_name(self) -> str:
