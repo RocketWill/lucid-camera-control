@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from lucid_camera_control.camera.models import CameraDescriptor
+from lucid_camera_control.camera.roi import RoiCapabilities, RoiRequest, RoiResult
 
 
 class CameraPort(Protocol):
@@ -19,6 +20,10 @@ class CameraPort(Protocol):
     def start_stream(self) -> None: ...
 
     def stop_stream(self) -> None: ...
+
+    def roi_capabilities(self) -> RoiCapabilities: ...
+
+    def apply_roi(self, request: RoiRequest) -> RoiResult: ...
 
 
 class RecorderPort(Protocol):
@@ -37,4 +42,3 @@ class NullRecorder:
 
     def stop(self) -> None:
         return None
-
