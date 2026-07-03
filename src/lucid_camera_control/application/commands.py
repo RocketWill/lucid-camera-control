@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from lucid_camera_control.camera.roi import RoiRequest
+
 
 @dataclass(frozen=True, slots=True)
 class ExploreCameras:
@@ -41,6 +43,11 @@ class StopRecording:
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class ApplyRoi:
+    request: RoiRequest
+
+
 ApplicationCommand: TypeAlias = (
     ExploreCameras
     | ConnectCamera
@@ -49,5 +56,5 @@ ApplicationCommand: TypeAlias = (
     | StopStream
     | StartRecording
     | StopRecording
+    | ApplyRoi
 )
-

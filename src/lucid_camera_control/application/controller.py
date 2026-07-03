@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from lucid_camera_control.application.commands import (
     ApplicationCommand,
+    ApplyRoi,
     CloseCamera,
     ConnectCamera,
     ExploreCameras,
@@ -19,6 +20,7 @@ from lucid_camera_control.application.events import (
     ApplicationEvent,
     CamerasDiscovered,
     OperationFailed,
+    RoiApplied,
     StateChanged,
 )
 from lucid_camera_control.application.state import (
@@ -92,6 +94,8 @@ class ApplicationController:
                 return self._start_recording()
             case StopRecording():
                 return self._stop_recording()
+            case ApplyRoi(request=request):
+                return self._apply_roi(request)
         raise TypeError(f"Unsupported command: {type(command).__name__}")
 
     def _explore(self) -> tuple[ApplicationEvent, ...]:
@@ -107,7 +111,21 @@ class ApplicationController:
     def _connect(self, serial_number: str) -> tuple[ApplicationEvent, ...]:
         self._require(CameraState.DISCONNECTED, "ConnectCamera")
         descriptor = self._camera.connect(serial_number)
-        return self._transition(CameraState.CONNECTED, active_camera=descriptor)
+        try:
+            roi_capabilities = self._camera.roi_capabilities()
+        except Exception:
+            self._camera.close()
+            raise
+        previous = self._snapshot.state
+        self._snapshot = replace(
+            self._snapshot,
+            state=CameraState.CONNECTED,
+            active_camera=descriptor,
+            roi_capabilities=roi_capabilities,
+            roi_result=None,
+            last_error=None,
+        )
+        return (StateChanged(previous, CameraState.CONNECTED),)
 
     def _close(self) -> tuple[ApplicationEvent, ...]:
         previous = self._snapshot.state
@@ -130,6 +148,8 @@ class ApplicationController:
             self._snapshot,
             state=CameraState.DISCONNECTED,
             active_camera=None,
+            roi_capabilities=None,
+            roi_result=None,
             last_error=error,
         )
         events: list[ApplicationEvent] = [
@@ -163,6 +183,35 @@ class ApplicationController:
         self._recorder.stop()
         return self._transition(CameraState.STREAMING)
 
+    def _apply_roi(self, request: object) -> tuple[ApplicationEvent, ...]:
+        from lucid_camera_control.camera.roi import RoiRequest
+
+        if not isinstance(request, RoiRequest):
+            raise TypeError("ApplyRoi requires RoiRequest")
+        if self._snapshot.state not in (CameraState.CONNECTED, CameraState.STREAMING):
+            raise InvalidTransitionError(
+                "ApplyRoi requires Connected or Streaming; "
+                f"current state is {self._snapshot.state.value}"
+            )
+        was_streaming = self._snapshot.state is CameraState.STREAMING
+        if was_streaming:
+            self._camera.stop_stream()
+        try:
+            result = self._camera.apply_roi(request)
+            if was_streaming:
+                self._camera.start_stream()
+        except Exception:
+            if was_streaming:
+                self._snapshot = replace(self._snapshot, state=CameraState.CONNECTED)
+            raise
+        self._snapshot = replace(
+            self._snapshot,
+            roi_capabilities=result.capabilities,
+            roi_result=result,
+            last_error=None,
+        )
+        return (RoiApplied(result),)
+
     def _transition(
         self,
         target: CameraState,
@@ -189,4 +238,3 @@ class ApplicationController:
             action()
         except Exception as exc:
             errors.append(str(exc) or type(exc).__name__)
-
