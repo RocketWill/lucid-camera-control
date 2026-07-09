@@ -5,6 +5,7 @@ import unittest
 from lucid_camera_control.application.commands import (
     CloseCamera,
     ConnectCamera,
+    ApplyRoi,
     ExploreCameras,
     StartRecording,
     StartStream,
@@ -18,6 +19,34 @@ from lucid_camera_control.application.controller import (
 from lucid_camera_control.application.events import CamerasDiscovered, OperationFailed
 from lucid_camera_control.application.state import CameraState
 from lucid_camera_control.camera.models import CameraDescriptor
+from lucid_camera_control.camera.nodes import NodeCapability, NodeKind
+from lucid_camera_control.camera.roi import (
+    AppliedRoi,
+    RoiCapabilities,
+    RoiRequest,
+    RoiResult,
+)
+
+
+def fake_roi_capabilities() -> RoiCapabilities:
+    def capability(name: str, value: object) -> NodeCapability:
+        return NodeCapability(name, NodeKind.INTEGER, True, True, True, value=value)
+
+    return RoiCapabilities(
+        capability("Width", 2048),
+        capability("Height", 1536),
+        capability("OffsetX", 0),
+        capability("OffsetY", 0),
+        NodeCapability(
+            "PixelFormat",
+            NodeKind.ENUMERATION,
+            True,
+            True,
+            True,
+            value="Mono8",
+            choices=("Mono8",),
+        ),
+    )
 
 
 class FakeCamera:
@@ -47,6 +76,21 @@ class FakeCamera:
 
     def stop_stream(self) -> None:
         self._call("stop_stream")
+
+    def roi_capabilities(self) -> RoiCapabilities:
+        return fake_roi_capabilities()
+
+    def apply_roi(self, request: RoiRequest) -> RoiResult:
+        self._call("apply_roi")
+        applied = AppliedRoi(
+            request.enabled,
+            request.width,
+            request.height,
+            request.offset_x,
+            request.offset_y,
+            request.centered,
+        )
+        return RoiResult(request, applied, (), fake_roi_capabilities(), 0, 60.0)
 
 
 class FakeRecorder:
@@ -148,6 +192,31 @@ class ApplicationControllerTests(unittest.TestCase):
         unsubscribe()
         self.controller.execute(ExploreCameras())
         self.assertEqual(len(received), 1)
+
+    def test_apply_roi_stops_and_restarts_an_active_stream(self) -> None:
+        self.connect_and_stream()
+        request = RoiRequest(True, 1024, 768, True)
+        self.controller.execute(ApplyRoi(request))
+        self.assertEqual(
+            self.camera.calls,
+            [
+                "connect:ABC123",
+                "start_stream",
+                "stop_stream",
+                "apply_roi",
+                "start_stream",
+            ],
+        )
+        self.assertEqual(self.controller.snapshot.state, CameraState.STREAMING)
+        self.assertEqual(self.controller.snapshot.roi_result.requested, request)
+
+    def test_failed_streaming_roi_stays_connected_and_does_not_restart(self) -> None:
+        self.connect_and_stream()
+        self.camera.fail_on.add("apply_roi")
+        events = self.controller.execute(ApplyRoi(RoiRequest(True, 1024, 768)))
+        self.assertIsInstance(events[0], OperationFailed)
+        self.assertEqual(self.controller.snapshot.state, CameraState.CONNECTED)
+        self.assertEqual(self.camera.calls[-2:], ["stop_stream", "apply_roi"])
 
 
 if __name__ == "__main__":
