@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.roi import RoiCapabilities, RoiRequest, RoiResult
+from lucid_camera_control.media.frame import Frame
 
 
 class CameraPort(Protocol):
@@ -24,6 +26,12 @@ class CameraPort(Protocol):
     def roi_capabilities(self) -> RoiCapabilities: ...
 
     def apply_roi(self, request: RoiRequest) -> RoiResult: ...
+
+    def subscribe_frames(self, listener: Callable[[Frame], None]) -> Callable[[], None]: ...
+
+    def subscribe_acquisition_errors(
+        self, listener: Callable[[Exception], None]
+    ) -> Callable[[], None]: ...
 
 
 class RecorderPort(Protocol):
