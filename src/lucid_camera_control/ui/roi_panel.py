@@ -136,6 +136,11 @@ class RoiPanel(QGroupBox):
     def _refresh_enabled(self) -> None:
         connected = self._snapshot.state in (CameraState.CONNECTED, CameraState.STREAMING)
         usable = connected and not self._busy and self._snapshot.roi_capabilities is not None
+        controls = self._snapshot.control_capabilities
+        binning = int(controls.binning_horizontal.value or 1) if controls else 1
+        if binning > 1:
+            usable = False
+            self.result_label.setText("Hardware ROI requires 1 x 1 binning.")
         roi_enabled = usable and self.enable_roi.isChecked()
         manual = roi_enabled and not self.center_roi.isChecked()
         self.enable_roi.setEnabled(usable)
