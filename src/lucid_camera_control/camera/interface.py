@@ -6,6 +6,11 @@ from collections.abc import Callable
 from typing import Protocol
 
 from lucid_camera_control.camera.models import CameraDescriptor
+from lucid_camera_control.camera.controls import (
+    CameraControlCapabilities,
+    CameraControlRequest,
+    CameraControlResult,
+)
 from lucid_camera_control.camera.roi import RoiCapabilities, RoiRequest, RoiResult
 from lucid_camera_control.media.frame import Frame
 
@@ -26,6 +31,10 @@ class CameraPort(Protocol):
     def roi_capabilities(self) -> RoiCapabilities: ...
 
     def apply_roi(self, request: RoiRequest) -> RoiResult: ...
+
+    def control_capabilities(self) -> CameraControlCapabilities: ...
+
+    def apply_controls(self, request: CameraControlRequest) -> CameraControlResult: ...
 
     def subscribe_frames(self, listener: Callable[[Frame], None]) -> Callable[[], None]: ...
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from lucid_camera_control.application.commands import (
     CloseCamera,
     ConnectCamera,
     ApplyRoi,
+    ApplyCameraControls,
     ExploreCameras,
     StartRecording,
     StartStream,
@@ -20,6 +22,11 @@ from lucid_camera_control.application.events import CamerasDiscovered, Operation
 from lucid_camera_control.application.state import CameraState
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.nodes import NodeCapability, NodeKind
+from lucid_camera_control.camera.controls import (
+    CameraControlCapabilities,
+    CameraControlRequest,
+    CameraControlResult,
+)
 from lucid_camera_control.camera.roi import (
     AppliedRoi,
     RoiCapabilities,
@@ -46,6 +53,45 @@ def fake_roi_capabilities() -> RoiCapabilities:
             value="Mono8",
             choices=("Mono8",),
         ),
+    )
+
+
+def fake_control_capabilities(binning: int = 1) -> CameraControlCapabilities:
+    def numeric(name: str, value: float) -> NodeCapability:
+        return NodeCapability(
+            name, NodeKind.FLOAT, True, True, True, value, 0.0, 100.0, 0.1
+        )
+
+    def enumeration(name: str, value: str) -> NodeCapability:
+        return NodeCapability(
+            name,
+            NodeKind.ENUMERATION,
+            True,
+            True,
+            True,
+            value,
+            choices=("Off", "Continuous"),
+        )
+
+    boolean = lambda name, value: NodeCapability(
+        name, NodeKind.BOOLEAN, True, True, True, value
+    )
+    bin_cap = NodeCapability(
+        "BinningHorizontal", NodeKind.INTEGER, True, True, True, binning, 1, 2, 1
+    )
+    return CameraControlCapabilities(
+        enumeration("ExposureAuto", "Off"),
+        numeric("ExposureTime", 10.0),
+        enumeration("GainAuto", "Off"),
+        numeric("Gain", 0.0),
+        boolean("AcquisitionFrameRateEnable", False),
+        numeric("AcquisitionFrameRate", 30.0),
+        boolean("GammaEnable", True),
+        numeric("Gamma", 1.0),
+        numeric("BlackLevel", 0.0),
+        enumeration("BalanceWhiteAuto", "Off"),
+        bin_cap,
+        replace(bin_cap, name="BinningVertical"),
     )
 
 
@@ -80,6 +126,9 @@ class FakeCamera:
     def roi_capabilities(self) -> RoiCapabilities:
         return fake_roi_capabilities()
 
+    def control_capabilities(self) -> CameraControlCapabilities:
+        return fake_control_capabilities()
+
     def apply_roi(self, request: RoiRequest) -> RoiResult:
         self._call("apply_roi")
         applied = AppliedRoi(
@@ -91,6 +140,12 @@ class FakeCamera:
             request.centered,
         )
         return RoiResult(request, applied, (), fake_roi_capabilities(), 0, 60.0)
+
+    def apply_controls(self, request: CameraControlRequest) -> CameraControlResult:
+        self._call("apply_controls")
+        return CameraControlResult(
+            request, (), fake_control_capabilities(request.binning or 1)
+        )
 
 
 class FakeRecorder:
@@ -217,6 +272,25 @@ class ApplicationControllerTests(unittest.TestCase):
         self.assertIsInstance(events[0], OperationFailed)
         self.assertEqual(self.controller.snapshot.state, CameraState.CONNECTED)
         self.assertEqual(self.camera.calls[-2:], ["stop_stream", "apply_roi"])
+
+    def test_apply_controls_stops_refreshes_and_restarts_active_stream(self) -> None:
+        self.connect_and_stream()
+        request = CameraControlRequest(False, 1000, False, 2, True, 30, binning=1)
+        self.controller.execute(ApplyCameraControls(request))
+        self.assertEqual(
+            self.camera.calls[-3:],
+            ["stop_stream", "apply_controls", "start_stream",],
+        )
+        self.assertEqual(self.controller.snapshot.state, CameraState.STREAMING)
+        self.assertEqual(self.controller.snapshot.control_result.requested, request)
+
+    def test_2x2_binning_is_rejected_while_hardware_roi_is_enabled(self) -> None:
+        self.controller.execute(ConnectCamera("ABC123"))
+        self.controller.execute(ApplyRoi(RoiRequest(True, 1024, 768)))
+        request = CameraControlRequest(False, 1000, False, 2, False, 30, binning=2)
+        with self.assertRaises(InvalidTransitionError):
+            self.controller.execute(ApplyCameraControls(request))
+        self.assertNotIn("apply_controls", self.camera.calls)
 
 
 if __name__ == "__main__":
