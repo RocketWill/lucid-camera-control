@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import replace
+from pathlib import Path
 
 from lucid_camera_control.application.commands import (
     CloseCamera,
     ConnectCamera,
     ApplyRoi,
     ApplyCameraControls,
+    CaptureScreenshot,
     ExploreCameras,
     StartRecording,
     StartStream,
@@ -18,7 +20,11 @@ from lucid_camera_control.application.controller import (
     ApplicationController,
     InvalidTransitionError,
 )
-from lucid_camera_control.application.events import CamerasDiscovered, OperationFailed
+from lucid_camera_control.application.events import (
+    CamerasDiscovered,
+    OperationFailed,
+    ScreenshotSaved,
+)
 from lucid_camera_control.application.state import CameraState
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.nodes import NodeCapability, NodeKind
@@ -153,7 +159,7 @@ class FakeRecorder:
         self.calls: list[str] = []
         self.fail_on: set[str] = set()
 
-    def start(self) -> None:
+    def start(self, *, fps: float, serial_number: str) -> None:
         self.calls.append("start")
         if "start" in self.fail_on:
             raise RuntimeError("recorder start failed")
@@ -164,11 +170,23 @@ class FakeRecorder:
             raise RuntimeError("recorder stop failed")
 
 
+class FakeScreenshot:
+    def __init__(self) -> None:
+        self.serials: list[str] = []
+
+    def capture(self, serial_number: str) -> Path:
+        self.serials.append(serial_number)
+        return Path("ABC123_capture.png")
+
+
 class ApplicationControllerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.camera = FakeCamera()
         self.recorder = FakeRecorder()
-        self.controller = ApplicationController(self.camera, self.recorder)
+        self.screenshot = FakeScreenshot()
+        self.controller = ApplicationController(
+            self.camera, self.recorder, self.screenshot
+        )
 
     def connect_and_stream(self) -> None:
         self.controller.execute(ConnectCamera("ABC123"))
@@ -291,6 +309,16 @@ class ApplicationControllerTests(unittest.TestCase):
         with self.assertRaises(InvalidTransitionError):
             self.controller.execute(ApplyCameraControls(request))
         self.assertNotIn("apply_controls", self.camera.calls)
+
+    def test_screenshot_uses_active_serial_while_streaming(self) -> None:
+        self.connect_and_stream()
+        events = self.controller.execute(CaptureScreenshot())
+        self.assertIsInstance(events[0], ScreenshotSaved)
+        self.assertEqual(self.screenshot.serials, ["ABC123"])
+        self.assertEqual(
+            self.controller.snapshot.last_screenshot_path,
+            Path("ABC123_capture.png"),
+        )
 
 
 if __name__ == "__main__":

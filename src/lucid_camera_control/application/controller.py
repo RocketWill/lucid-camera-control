@@ -8,6 +8,7 @@ from dataclasses import replace
 from lucid_camera_control.application.commands import (
     ApplicationCommand,
     ApplyCameraControls,
+    CaptureScreenshot,
     ApplyRoi,
     CloseCamera,
     ConnectCamera,
@@ -20,6 +21,7 @@ from lucid_camera_control.application.commands import (
 from lucid_camera_control.application.events import (
     ApplicationEvent,
     CameraControlsApplied,
+    ScreenshotSaved,
     CamerasDiscovered,
     OperationFailed,
     RoiApplied,
@@ -30,7 +32,13 @@ from lucid_camera_control.application.state import (
     CameraState,
     ErrorInfo,
 )
-from lucid_camera_control.camera.interface import CameraPort, NullRecorder, RecorderPort
+from lucid_camera_control.camera.interface import (
+    CameraPort,
+    NullRecorder,
+    NullScreenshot,
+    RecorderPort,
+    ScreenshotPort,
+)
 
 EventListener = Callable[[ApplicationEvent, ApplicationSnapshot], None]
 
@@ -46,9 +54,11 @@ class ApplicationController:
         self,
         camera: CameraPort,
         recorder: RecorderPort | None = None,
+        screenshot: ScreenshotPort | None = None,
     ) -> None:
         self._camera = camera
         self._recorder = recorder or NullRecorder()
+        self._screenshot = screenshot or NullScreenshot()
         self._snapshot = ApplicationSnapshot()
         self._listeners: list[EventListener] = []
 
@@ -100,6 +110,8 @@ class ApplicationController:
                 return self._apply_roi(request)
             case ApplyCameraControls(request=request):
                 return self._apply_controls(request)
+            case CaptureScreenshot():
+                return self._capture_screenshot()
         raise TypeError(f"Unsupported command: {type(command).__name__}")
 
     def _explore(self) -> tuple[ApplicationEvent, ...]:
@@ -182,7 +194,13 @@ class ApplicationController:
 
     def _start_recording(self) -> tuple[ApplicationEvent, ...]:
         self._require(CameraState.STREAMING, "StartRecording")
-        self._recorder.start()
+        active = self._snapshot.active_camera
+        if active is None:
+            raise RuntimeError("No active camera")
+        caps = self._snapshot.control_capabilities
+        fps_value = caps.frame_rate.value if caps is not None else None
+        fps = float(fps_value) if isinstance(fps_value, (int, float)) else 30.0
+        self._recorder.start(fps=fps, serial_number=active.serial_number)
         return self._transition(CameraState.RECORDING)
 
     def _stop_recording(self) -> tuple[ApplicationEvent, ...]:
@@ -265,6 +283,23 @@ class ApplicationController:
             last_error=None,
         )
         return (CameraControlsApplied(result),)
+
+    def _capture_screenshot(self) -> tuple[ApplicationEvent, ...]:
+        if self._snapshot.state not in (CameraState.STREAMING, CameraState.RECORDING):
+            raise InvalidTransitionError(
+                "CaptureScreenshot requires Streaming or Recording; "
+                f"current state is {self._snapshot.state.value}"
+            )
+        active = self._snapshot.active_camera
+        if active is None:
+            raise RuntimeError("No active camera")
+        path = self._screenshot.capture(active.serial_number)
+        self._snapshot = replace(
+            self._snapshot,
+            last_screenshot_path=path,
+            last_error=None,
+        )
+        return (ScreenshotSaved(path),)
 
     def _transition(
         self,

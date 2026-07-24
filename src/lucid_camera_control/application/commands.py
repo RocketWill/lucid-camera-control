@@ -45,6 +45,11 @@ class StopRecording:
 
 
 @dataclass(frozen=True, slots=True)
+class CaptureScreenshot:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
 class ApplyRoi:
     request: RoiRequest
 
@@ -62,6 +67,7 @@ ApplicationCommand: TypeAlias = (
     | StopStream
     | StartRecording
     | StopRecording
+    | CaptureScreenshot
     | ApplyRoi
     | ApplyCameraControls
 )
