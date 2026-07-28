@@ -12,6 +12,7 @@ from lucid_camera_control.camera.controls import (
     CameraControlCapabilities,
     CameraControlResult,
 )
+from lucid_camera_control.config.models import AppConfigV1
 
 
 class CameraState(StrEnum):
@@ -39,3 +40,4 @@ class ApplicationSnapshot:
     control_capabilities: CameraControlCapabilities | None = None
     control_result: CameraControlResult | None = None
     last_screenshot_path: Path | None = None
+    applied_configuration: AppConfigV1 | None = None
