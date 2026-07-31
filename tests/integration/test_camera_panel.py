@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import unittest
+import tempfile
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -24,6 +26,8 @@ from lucid_camera_control.camera.roi import (
     RoiResult,
 )
 from lucid_camera_control.ui.main_window import MainWindow
+from lucid_camera_control.config.store import ConfigStore
+from lucid_camera_control.config.models import AppConfigV1
 
 
 class FakeCamera:
@@ -116,12 +120,19 @@ class CameraPanelIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.app = QApplication.instance() or QApplication([])
         self.camera = FakeCamera()
-        self.window = MainWindow(ApplicationController(self.camera))
+        self.temp_directory = tempfile.TemporaryDirectory()
+        self.window = MainWindow(
+            ApplicationController(self.camera),
+            config_store=ConfigStore(
+                Path(self.temp_directory.name) / "config.json"
+            ),
+        )
         self.window.show()
 
     def tearDown(self) -> None:
         self.window.close()
         self.app.processEvents()
+        self.temp_directory.cleanup()
 
     def run_command(self, click: object) -> None:
         spy = QSignalSpy(self.window.bridge.command_completed)
@@ -158,6 +169,28 @@ class CameraPanelIntegrationTests(unittest.TestCase):
         )
         self.assertIn("ROI applied: 1024 x 768", panel.result_label.text())
         self.assertIn("Maximum FPS: 60.00", panel.result_label.text())
+
+    def test_last_known_good_loads_preferences_without_camera_mutation(self) -> None:
+        self.window.close()
+        self.app.processEvents()
+        store = ConfigStore(Path(self.temp_directory.name) / "config.json")
+        store.save_last_known_good(
+            AppConfigV1(
+                preferred_camera_serial="ABC123",
+                preview_contrast=1.8,
+            )
+        )
+        self.window = MainWindow(
+            ApplicationController(self.camera),
+            config_store=store,
+        )
+        self.assertEqual(self.window.preview_widget.contrast.value(), 1.8)
+        self.assertIsNone(self.camera.last_roi_request)
+        self.assertFalse(self.camera.closed)
+        self.assertIn(
+            "Loaded last configuration",
+            self.window.config_panel.status_label.text(),
+        )
 
 
 if __name__ == "__main__":
