@@ -30,6 +30,7 @@ from lucid_camera_control.camera.roi import (
     RoiTransaction,
 )
 from lucid_camera_control.media.frame import Frame
+from lucid_camera_control.camera.reset import FactoryResetResult, FactoryResetTransaction
 
 
 class ArenaSystemLike(Protocol):
@@ -238,6 +239,9 @@ class ArenaCameraSystem:
 
     def apply_controls(self, request: CameraControlRequest) -> CameraControlResult:
         return CameraControls(self._node_accessor()).apply(request)
+
+    def factory_reset(self) -> FactoryResetResult:
+        return FactoryResetTransaction(self._node_accessor()).apply()
 
     def _require_device(self) -> Any:
         if self._device is None:

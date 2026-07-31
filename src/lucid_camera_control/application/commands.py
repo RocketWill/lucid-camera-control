@@ -51,6 +51,16 @@ class CaptureScreenshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ResetFactoryDefaults:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class HandleDeviceLoss:
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
 class ApplyRoi:
     request: RoiRequest
 
@@ -74,6 +84,8 @@ ApplicationCommand: TypeAlias = (
     | StartRecording
     | StopRecording
     | CaptureScreenshot
+    | ResetFactoryDefaults
+    | HandleDeviceLoss
     | ApplyRoi
     | ApplyCameraControls
     | ApplyConfiguration

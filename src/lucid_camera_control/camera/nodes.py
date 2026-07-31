@@ -158,6 +158,17 @@ class NodeAccessor:
             raise NodeAccessError(name, str(exc) or type(exc).__name__, capability) from exc
         return self._readback(name, requested, requested)
 
+    def execute_command(self, name: str) -> None:
+        capability, node = self._writable_node(name, expected=(NodeKind.COMMAND,))
+        try:
+            node.execute()
+        except Exception as exc:
+            raise NodeAccessError(
+                name,
+                str(exc) or type(exc).__name__,
+                capability,
+            ) from exc
+
     @staticmethod
     def align_numeric(
         requested: int | float,
@@ -285,4 +296,3 @@ class NodeAccessor:
             f"range=[{capability.minimum}, {capability.maximum}], "
             f"increment={capability.increment}: {error}"
         )
-

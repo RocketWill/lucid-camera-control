@@ -14,6 +14,7 @@ from lucid_camera_control.camera.controls import (
 )
 from lucid_camera_control.camera.roi import RoiCapabilities, RoiRequest, RoiResult
 from lucid_camera_control.media.frame import Frame
+from lucid_camera_control.camera.reset import FactoryResetResult
 
 
 class CameraPort(Protocol):
@@ -36,6 +37,8 @@ class CameraPort(Protocol):
     def control_capabilities(self) -> CameraControlCapabilities: ...
 
     def apply_controls(self, request: CameraControlRequest) -> CameraControlResult: ...
+
+    def factory_reset(self) -> FactoryResetResult: ...
 
     def subscribe_frames(self, listener: Callable[[Frame], None]) -> Callable[[], None]: ...
 
