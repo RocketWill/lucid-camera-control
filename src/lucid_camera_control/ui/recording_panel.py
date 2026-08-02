@@ -15,6 +15,8 @@ class RecordingPanel(QGroupBox):
     screenshot_requested = Signal()
     start_requested = Signal()
     stop_requested = Signal()
+    open_screenshot_folder_requested = Signal()
+    open_recording_folder_requested = Signal()
 
     def __init__(
         self,
@@ -24,6 +26,8 @@ class RecordingPanel(QGroupBox):
         self.screenshot_button = QPushButton("Save PNG Screenshot")
         self.start_button = QPushButton("Start Raw AVI")
         self.stop_button = QPushButton("Stop Recording")
+        self.open_screenshot_folder_button = QPushButton("Open Screenshot Folder")
+        self.open_recording_folder_button = QPushButton("Open Recording Folder")
         self.status_label = QLabel("Not recording")
         self.status_label.setWordWrap(True)
         self.path_label = QLabel("No media saved in this session.")
@@ -33,6 +37,8 @@ class RecordingPanel(QGroupBox):
         buttons.addWidget(self.screenshot_button)
         buttons.addWidget(self.start_button)
         buttons.addWidget(self.stop_button)
+        buttons.addWidget(self.open_screenshot_folder_button)
+        buttons.addWidget(self.open_recording_folder_button)
         layout = QVBoxLayout(self)
         layout.addLayout(buttons)
         layout.addWidget(self.status_label)
@@ -44,6 +50,12 @@ class RecordingPanel(QGroupBox):
         self.screenshot_button.clicked.connect(self.screenshot_requested)
         self.start_button.clicked.connect(self.start_requested)
         self.stop_button.clicked.connect(self.stop_requested)
+        self.open_screenshot_folder_button.clicked.connect(
+            self.open_screenshot_folder_requested
+        )
+        self.open_recording_folder_button.clicked.connect(
+            self.open_recording_folder_requested
+        )
         self._timer = QTimer(self)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._refresh_status)
@@ -69,6 +81,8 @@ class RecordingPanel(QGroupBox):
         )
         self.start_button.setEnabled(state is CameraState.STREAMING and not self._busy)
         self.stop_button.setEnabled(state is CameraState.RECORDING and not self._busy)
+        self.open_screenshot_folder_button.setEnabled(not self._busy)
+        self.open_recording_folder_button.setEnabled(not self._busy)
 
     def _refresh_status(self) -> None:
         if self._status_provider is None:

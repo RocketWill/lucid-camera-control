@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QDesktopServices
 from pathlib import Path
 from dataclasses import asdict
 from PySide6.QtWidgets import (
@@ -26,6 +26,8 @@ from lucid_camera_control.application.commands import (
     StartRecording,
     StopRecording,
     CaptureScreenshot,
+    ResetFactoryDefaults,
+    HandleDeviceLoss,
 )
 from lucid_camera_control.application.controller import ApplicationController
 from lucid_camera_control.application.state import CameraState
@@ -47,8 +49,9 @@ from lucid_camera_control.config.models import (
     WindowConfig,
 )
 from lucid_camera_control.config.store import ConfigStore
-from PySide6.QtCore import QStandardPaths
+from PySide6.QtCore import QStandardPaths, QUrl
 from lucid_camera_control.application.commands import ApplyConfiguration
+from lucid_camera_control.camera.acquisition import RecoverableFrameError
 
 
 class MainWindow(QMainWindow):
@@ -90,6 +93,7 @@ class MainWindow(QMainWindow):
         )
         self._config_store = config_store or ConfigStore(config_root / "config.json")
         self._pending_config = AppConfigV1()
+        self._pending_device_loss: str | None = None
         self.bridge = CommandBridge(self.controller)
         self.preview_bridge = PreviewBridge(frame_source) if frame_source else None
         self.setWindowTitle("LUCID Camera Control")
@@ -115,6 +119,7 @@ class MainWindow(QMainWindow):
         self.camera_panel.explore_button.clicked.connect(self._explore)
         self.camera_panel.connect_button.clicked.connect(self._connect)
         self.camera_panel.close_button.clicked.connect(self._close_camera)
+        self.camera_panel.reset_button.clicked.connect(self._factory_reset)
         self.roi_panel.apply_requested.connect(
             lambda request: self.bridge.execute(ApplyRoi(request))
         )
@@ -136,6 +141,12 @@ class MainWindow(QMainWindow):
         self.recording_panel.stop_requested.connect(
             lambda: self.bridge.execute(StopRecording())
         )
+        self.recording_panel.open_screenshot_folder_requested.connect(
+            lambda: self._open_folder(self._pending_config.screenshot_directory)
+        )
+        self.recording_panel.open_recording_folder_requested.connect(
+            lambda: self._open_folder(self._pending_config.recording_directory)
+        )
         self.config_panel.import_requested.connect(self._import_config)
         self.config_panel.export_requested.connect(self._export_config)
         self.config_panel.apply_requested.connect(self._apply_imported_config)
@@ -146,11 +157,12 @@ class MainWindow(QMainWindow):
         self.bridge.busy_changed.connect(self.preview_widget.set_busy)
         self.bridge.busy_changed.connect(self.recording_panel.set_busy)
         self.bridge.busy_changed.connect(self.config_panel.set_busy)
+        self.bridge.busy_changed.connect(self._on_busy_changed)
         self.bridge.command_completed.connect(self._on_command_completed)
         self.bridge.command_failed.connect(self._show_error)
         if self.preview_bridge is not None:
             self.preview_bridge.frame_arrived.connect(self.preview_widget.show_frame)
-            self.preview_bridge.acquisition_failed.connect(self._show_error)
+            self.preview_bridge.acquisition_failed.connect(self._on_acquisition_error)
 
         layout = QVBoxLayout()
         layout.addWidget(title)
@@ -177,6 +189,33 @@ class MainWindow(QMainWindow):
     def _close_camera(self) -> None:
         self.bridge.execute(CloseCamera())
 
+    def _factory_reset(self) -> None:
+        answer = QMessageBox.warning(
+            self,
+            "Restore factory defaults?",
+            "Recording and preview will stop. Current camera settings will be lost.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer is QMessageBox.StandardButton.Yes:
+            self.bridge.execute(ResetFactoryDefaults())
+
+    def _on_acquisition_error(self, error: object) -> None:
+        if isinstance(error, RecoverableFrameError):
+            return
+        self._pending_device_loss = str(error) or type(error).__name__
+        self._dispatch_pending_device_loss()
+
+    def _on_busy_changed(self, busy: bool) -> None:
+        if not busy:
+            self._dispatch_pending_device_loss()
+
+    def _dispatch_pending_device_loss(self) -> None:
+        if self.bridge.busy or self._pending_device_loss is None:
+            return
+        message, self._pending_device_loss = self._pending_device_loss, None
+        self.bridge.execute(HandleDeviceLoss(message))
+
     def _on_snapshot(self, snapshot: object) -> None:
         self.camera_panel.apply_snapshot(snapshot, self.bridge.busy)
         self.roi_panel.apply_snapshot(snapshot, self.bridge.busy)
@@ -191,6 +230,10 @@ class MainWindow(QMainWindow):
 
     def _show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Camera operation failed", message)
+
+    def _open_folder(self, path: Path) -> None:
+        path.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _load_last_config(self) -> None:
         try:
@@ -248,12 +291,64 @@ class MainWindow(QMainWindow):
     def _on_command_completed(self, events: object) -> None:
         if any(type(event).__name__ == "ConfigurationApplied" for event in events):
             self.config_panel.set_applied()
+        if any(type(event).__name__ == "FactoryDefaultsLoaded" for event in events):
+            self._pending_config = self._factory_default_config()
         try:
             config = self._runtime_config()
             self._config_store.save_last_known_good(config)
             self._pending_config = config
         except Exception:
             pass
+
+    def _factory_default_config(self) -> AppConfigV1:
+        snapshot = self.controller.snapshot
+        roi_caps = snapshot.roi_capabilities
+        control_caps = snapshot.control_capabilities
+        if roi_caps is None or control_caps is None:
+            return self._pending_config
+        width = int(roi_caps.width.value or 0)
+        height = int(roi_caps.height.value or 0)
+        offset_x = int(roi_caps.offset_x.value or 0)
+        offset_y = int(roi_caps.offset_y.value or 0)
+        roi = RoiConfig(
+            enabled=bool(
+                width < int(roi_caps.width.maximum or width)
+                or height < int(roi_caps.height.maximum or height)
+                or offset_x
+                or offset_y
+            ),
+            width=width,
+            height=height,
+            centered=False,
+            offset_x=offset_x,
+            offset_y=offset_y,
+        )
+        controls = CameraControlsConfig(
+            exposure_auto=control_caps.exposure_auto.value != "Off",
+            exposure_time=float(control_caps.exposure_time.value or 1000),
+            gain_auto=control_caps.gain_auto.value != "Off",
+            gain=float(control_caps.gain.value or 0),
+            frame_rate_enabled=bool(control_caps.frame_rate_enable.value),
+            frame_rate=float(control_caps.frame_rate.value or 30),
+            gamma_enabled=bool(control_caps.gamma_enable.value)
+            if control_caps.gamma_enable.available
+            else None,
+            gamma=float(control_caps.gamma.value)
+            if control_caps.gamma.value is not None
+            else None,
+            black_level=float(control_caps.black_level.value)
+            if control_caps.black_level.value is not None
+            else None,
+            white_balance_auto=control_caps.white_balance_auto.value != "Off"
+            if control_caps.white_balance_auto.available
+            else None,
+            binning=int(control_caps.binning_horizontal.value or 1)
+            if control_caps.binning_horizontal.available
+            else None,
+        )
+        return self._pending_config.model_copy(
+            update={"roi": roi, "controls": controls}
+        )
 
     def _apply_app_preferences(self, config: AppConfigV1) -> None:
         self.preview_widget.contrast.setValue(config.preview_contrast)

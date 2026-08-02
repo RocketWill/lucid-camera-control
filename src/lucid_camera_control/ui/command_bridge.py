@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal, Slot
 
 from lucid_camera_control.application.commands import ApplicationCommand
 from lucid_camera_control.application.controller import ApplicationController
+from lucid_camera_control.application.events import OperationFailed
 
 
 class _WorkerSignals(QObject):
@@ -80,6 +81,9 @@ class CommandBridge(QObject):
         self._set_busy(False)
         self.snapshot_changed.emit(snapshot)
         self.command_completed.emit(events)
+        for event in events:
+            if isinstance(event, OperationFailed):
+                self.command_failed.emit(event.error.message)
 
     @Slot(str)
     def _on_failed(self, message: str) -> None:

@@ -22,9 +22,9 @@ class FramePublisher(Protocol):
 
 class PreviewBridge(QObject):
     frame_arrived = Signal(object, float)
-    acquisition_failed = Signal(str)
+    acquisition_failed = Signal(object)
     _frame_pending = Signal()
-    _error_pending = Signal(str)
+    _error_pending = Signal(object)
 
     def __init__(self, source: FramePublisher) -> None:
         super().__init__()
@@ -59,7 +59,7 @@ class PreviewBridge(QObject):
             self._frame_pending.emit()
 
     def _on_error(self, error: Exception) -> None:
-        self._error_pending.emit(str(error) or type(error).__name__)
+        self._error_pending.emit(error)
 
     @Slot()
     def _deliver_latest(self) -> None:

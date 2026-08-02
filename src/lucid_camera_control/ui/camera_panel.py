@@ -23,6 +23,8 @@ class CameraPanel(QWidget):
         self.connect_button.setObjectName("connectCameraButton")
         self.close_button = QPushButton("Close Camera")
         self.close_button.setObjectName("closeCameraButton")
+        self.reset_button = QPushButton("Factory Reset")
+        self.reset_button.setObjectName("factoryResetButton")
 
         layout = QGridLayout(self)
         layout.addWidget(QLabel("Status"), 0, 0)
@@ -32,6 +34,7 @@ class CameraPanel(QWidget):
         layout.addWidget(self.explore_button, 1, 2)
         layout.addWidget(self.connect_button, 1, 3)
         layout.addWidget(self.close_button, 1, 4)
+        layout.addWidget(self.reset_button, 1, 5)
 
         self.apply_snapshot(ApplicationSnapshot(), busy=False)
         self.camera_combo.currentIndexChanged.connect(self._refresh_buttons)
@@ -54,6 +57,12 @@ class CameraPanel(QWidget):
         self._snapshot = snapshot
         self._busy = busy
         self.status_label.setText(snapshot.state.value)
+        self.connect_button.setText(
+            "Reconnect"
+            if snapshot.last_error is not None
+            and snapshot.last_error.operation == "DeviceLost"
+            else "Connect"
+        )
 
         serials = tuple(
             self.camera_combo.itemData(index)
@@ -87,3 +96,4 @@ class CameraPanel(QWidget):
             disconnected and not self._busy and self.selected_serial is not None
         )
         self.close_button.setEnabled(not disconnected and not self._busy)
+        self.reset_button.setEnabled(not disconnected and not self._busy)
