@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QFileDialog,
+    QScrollArea,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -115,6 +117,12 @@ class MainWindow(QMainWindow):
         self.config_panel = ConfigPanel()
         self.status_label = self.camera_panel.status_label
         self.explore_button = self.camera_panel.explore_button
+        self.status_bar_camera_state = QLabel("Camera: Disconnected")
+        self.status_bar_camera_state.setObjectName("statusBarCameraState")
+        self.status_bar_recording_state = QLabel("Recording: Inactive")
+        self.status_bar_recording_state.setObjectName("statusBarRecordingState")
+        self.statusBar().addWidget(self.status_bar_camera_state)
+        self.statusBar().addPermanentWidget(self.status_bar_recording_state)
 
         self.camera_panel.explore_button.clicked.connect(self._explore)
         self.camera_panel.connect_button.clicked.connect(self._connect)
@@ -164,19 +172,89 @@ class MainWindow(QMainWindow):
             self.preview_bridge.frame_arrived.connect(self.preview_widget.show_frame)
             self.preview_bridge.acquisition_failed.connect(self._on_acquisition_error)
 
+        settings_layout = QVBoxLayout()
+        settings_layout.addWidget(self.camera_panel)
+        settings_layout.addWidget(self.roi_panel)
+        settings_layout.addWidget(self.controls_panel)
+        settings_layout.addWidget(self.config_panel)
+        settings_layout.addStretch(1)
+        settings_content = QWidget()
+        settings_content.setLayout(settings_layout)
+
+        settings_scroll = QScrollArea()
+        settings_scroll.setObjectName("settingsScrollArea")
+        settings_scroll.setWidgetResizable(True)
+        settings_scroll.setMinimumWidth(320)
+        settings_scroll.setWidget(settings_content)
+
+        imaging_layout = QVBoxLayout()
+        imaging_layout.addWidget(self.preview_widget, stretch=1)
+        imaging_layout.addWidget(self.recording_panel)
+        imaging_content = QWidget()
+        imaging_content.setLayout(imaging_layout)
+        imaging_content.setMinimumWidth(500)
+
+        workspace = QSplitter(Qt.Orientation.Horizontal)
+        workspace.setObjectName("workspaceSplitter")
+        workspace.addWidget(settings_scroll)
+        workspace.addWidget(imaging_content)
+        workspace.setCollapsible(0, False)
+        workspace.setCollapsible(1, False)
+        workspace.setStretchFactor(0, 0)
+        workspace.setStretchFactor(1, 1)
+        workspace.setSizes([380, 720])
+
         layout = QVBoxLayout()
         layout.addWidget(title)
-        layout.addWidget(self.camera_panel)
-        layout.addWidget(self.roi_panel)
-        layout.addWidget(self.controls_panel)
-        layout.addWidget(self.recording_panel)
-        layout.addWidget(self.config_panel)
-        layout.addWidget(self.preview_widget, stretch=1)
+        layout.addWidget(workspace, stretch=1)
 
         central = QWidget()
         central.setLayout(layout)
         self.setCentralWidget(central)
+        self._configure_tab_order()
         self._load_last_config()
+
+    def _configure_tab_order(self) -> None:
+        controls = (
+            self.camera_panel.camera_combo,
+            self.camera_panel.explore_button,
+            self.camera_panel.connect_button,
+            self.camera_panel.close_button,
+            self.camera_panel.reset_button,
+            self.roi_panel.enable_roi,
+            self.roi_panel.center_roi,
+            self.roi_panel.width,
+            self.roi_panel.height,
+            self.roi_panel.offset_x,
+            self.roi_panel.offset_y,
+            self.roi_panel.apply_button,
+            self.roi_panel.full_frame_button,
+            self.controls_panel.exposure_auto,
+            self.controls_panel.exposure_time,
+            self.controls_panel.gain_auto,
+            self.controls_panel.gain,
+            self.controls_panel.frame_rate_enabled,
+            self.controls_panel.frame_rate,
+            self.controls_panel.gamma_enabled,
+            self.controls_panel.gamma,
+            self.controls_panel.black_level,
+            self.controls_panel.white_balance_auto,
+            self.controls_panel.binning,
+            self.controls_panel.apply_button,
+            self.config_panel.import_button,
+            self.config_panel.export_button,
+            self.config_panel.apply_button,
+            self.preview_widget.start_button,
+            self.preview_widget.stop_button,
+            self.preview_widget.contrast,
+            self.recording_panel.screenshot_button,
+            self.recording_panel.start_button,
+            self.recording_panel.stop_button,
+            self.recording_panel.open_screenshot_folder_button,
+            self.recording_panel.open_recording_folder_button,
+        )
+        for current, following in zip(controls, controls[1:]):
+            QWidget.setTabOrder(current, following)
 
     def _explore(self) -> None:
         self.bridge.execute(ExploreCameras())
@@ -223,6 +301,12 @@ class MainWindow(QMainWindow):
         self.preview_widget.apply_snapshot(snapshot, self.bridge.busy)
         self.recording_panel.apply_snapshot(snapshot, self.bridge.busy)
         self.config_panel.apply_snapshot(snapshot, self.bridge.busy)
+        self.status_bar_camera_state.setText(f"Camera: {snapshot.state.value}")
+        self.status_bar_recording_state.setText(
+            "Recording: Active"
+            if snapshot.state is CameraState.RECORDING
+            else "Recording: Inactive"
+        )
         if snapshot.state is CameraState.DISCONNECTED:
             self.camera_panel.select_serial(
                 self._pending_config.preferred_camera_serial
