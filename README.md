@@ -10,6 +10,8 @@ The application was developed and tested with a `TRI032S-C` running firmware
 GenICam capabilities instead of a model-specific node list, but no second model
 was physically available during final acceptance.
 
+![LUCID Camera Control showing hardware ROI, live preview, and capability-driven camera controls](docs/images/lucid-camera-control.png)
+
 ## Functions
 
 - Discover Arena-compatible LUCID cameras and select one by serial number.
