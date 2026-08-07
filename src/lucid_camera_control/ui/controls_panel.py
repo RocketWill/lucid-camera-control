@@ -6,18 +6,17 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
 )
 
 from lucid_camera_control.application.state import ApplicationSnapshot, CameraState
 from lucid_camera_control.camera.controls import CameraControlRequest
 from lucid_camera_control.camera.nodes import NodeCapability
+from lucid_camera_control.ui.numeric_slider import NumericSliderControl
 
 
 class ControlsPanel(QGroupBox):
@@ -26,14 +25,31 @@ class ControlsPanel(QGroupBox):
     def __init__(self) -> None:
         super().__init__("Camera Controls")
         self.exposure_auto = QCheckBox("Auto")
-        self.exposure_time = self._numeric("exposureTimeSpinBox")
+        self.exposure_time_control = NumericSliderControl(
+            "exposureTime", "Exposure time"
+        )
+        self.exposure_time = self.exposure_time_control.spin_box
+        self.exposure_time_slider = self.exposure_time_control.slider
+        self.exposure_time_range = self.exposure_time_control.range_label
         self.gain_auto = QCheckBox("Auto")
-        self.gain = self._numeric("gainSpinBox")
+        self.gain_control = NumericSliderControl("gain", "Gain")
+        self.gain = self.gain_control.spin_box
+        self.gain_slider = self.gain_control.slider
+        self.gain_range = self.gain_control.range_label
         self.frame_rate_enabled = QCheckBox("Enabled")
-        self.frame_rate = self._numeric("frameRateSpinBox")
+        self.frame_rate_control = NumericSliderControl("frameRate", "Frame rate")
+        self.frame_rate = self.frame_rate_control.spin_box
+        self.frame_rate_slider = self.frame_rate_control.slider
+        self.frame_rate_range = self.frame_rate_control.range_label
         self.gamma_enabled = QCheckBox("Enabled")
-        self.gamma = self._numeric("gammaSpinBox")
-        self.black_level = self._numeric("blackLevelSpinBox")
+        self.gamma_control = NumericSliderControl("gamma", "Gamma")
+        self.gamma = self.gamma_control.spin_box
+        self.gamma_slider = self.gamma_control.slider
+        self.gamma_range = self.gamma_control.range_label
+        self.black_level_control = NumericSliderControl("blackLevel", "Black level")
+        self.black_level = self.black_level_control.spin_box
+        self.black_level_slider = self.black_level_control.slider
+        self.black_level_range = self.black_level_control.range_label
         self.white_balance_auto = QCheckBox("Auto")
         self.binning = QComboBox()
         self.binning.addItem("1 x 1", 1)
@@ -45,14 +61,14 @@ class ControlsPanel(QGroupBox):
 
         self.form = QFormLayout()
         self.form.addRow("Exposure mode", self.exposure_auto)
-        self.form.addRow("Exposure time", self.exposure_time)
+        self.form.addRow("Exposure time", self.exposure_time_control)
         self.form.addRow("Gain mode", self.gain_auto)
-        self.form.addRow("Gain", self.gain)
-        self.form.addRow("Frame-rate limit", self.frame_rate_enabled)
-        self.form.addRow("Frame rate", self.frame_rate)
+        self.form.addRow("Gain", self.gain_control)
+        self.form.addRow("FPS limit", self.frame_rate_enabled)
+        self.form.addRow("Frame rate", self.frame_rate_control)
         self.form.addRow("Gamma mode", self.gamma_enabled)
-        self.form.addRow("Gamma", self.gamma)
-        self.form.addRow("Black level", self.black_level)
+        self.form.addRow("Gamma", self.gamma_control)
+        self.form.addRow("Black level", self.black_level_control)
         self.form.addRow("White balance", self.white_balance_auto)
         self.form.addRow("Binning", self.binning)
         layout = QVBoxLayout(self)
@@ -75,14 +91,14 @@ class ControlsPanel(QGroupBox):
         caps = snapshot.control_capabilities
         if caps is not None:
             self._set_auto(self.exposure_auto, caps.exposure_auto)
-            self._configure_numeric(self.exposure_time, caps.exposure_time)
+            self.exposure_time_control.configure(caps.exposure_time, 1.0)
             self._set_auto(self.gain_auto, caps.gain_auto)
-            self._configure_numeric(self.gain, caps.gain)
+            self.gain_control.configure(caps.gain, 0.1)
             self._set_bool(self.frame_rate_enabled, caps.frame_rate_enable)
-            self._configure_numeric(self.frame_rate, caps.frame_rate)
+            self.frame_rate_control.configure(caps.frame_rate, 0.1)
             self._set_bool(self.gamma_enabled, caps.gamma_enable)
-            self._configure_numeric(self.gamma, caps.gamma)
-            self._configure_numeric(self.black_level, caps.black_level)
+            self.gamma_control.configure(caps.gamma, 0.01)
+            self.black_level_control.configure(caps.black_level, 0.1)
             self._set_auto(self.white_balance_auto, caps.white_balance_auto)
             binning = int(caps.binning_horizontal.value or 1)
             self.binning.setCurrentIndex(1 if binning == 2 else 0)
@@ -91,8 +107,10 @@ class ControlsPanel(QGroupBox):
             )
             self._set_row_visible(self.binning, has_binning)
             self._set_row_visible(self.gamma_enabled, caps.gamma_enable.available)
-            self._set_row_visible(self.gamma, caps.gamma.available)
-            self._set_row_visible(self.black_level, caps.black_level.available)
+            self._set_row_visible(self.gamma_control, caps.gamma.available)
+            self._set_row_visible(
+                self.black_level_control, caps.black_level.available
+            )
             self._set_row_visible(
                 self.white_balance_auto, caps.white_balance_auto.available
             )
@@ -135,16 +153,22 @@ class ControlsPanel(QGroupBox):
             and caps is not None
         )
         self.exposure_auto.setEnabled(usable and caps.exposure_auto.writable if caps else False)
-        self.exposure_time.setEnabled(usable and not self.exposure_auto.isChecked())
+        self.exposure_time_control.setEnabled(
+            usable and not self.exposure_auto.isChecked()
+        )
         self.gain_auto.setEnabled(usable and caps.gain_auto.writable if caps else False)
-        self.gain.setEnabled(usable and not self.gain_auto.isChecked())
+        self.gain_control.setEnabled(usable and not self.gain_auto.isChecked())
         self.frame_rate_enabled.setEnabled(
             usable and caps.frame_rate_enable.writable if caps else False
         )
-        self.frame_rate.setEnabled(usable and self.frame_rate_enabled.isChecked())
+        self.frame_rate_control.setEnabled(
+            usable and self.frame_rate_enabled.isChecked()
+        )
         self.gamma_enabled.setEnabled(usable and caps.gamma_enable.writable if caps else False)
-        self.gamma.setEnabled(usable and self.gamma_enabled.isChecked())
-        self.black_level.setEnabled(usable and caps.black_level.writable if caps else False)
+        self.gamma_control.setEnabled(usable and self.gamma_enabled.isChecked())
+        self.black_level_control.setEnabled(
+            usable and caps.black_level.writable if caps else False
+        )
         self.white_balance_auto.setEnabled(
             usable and caps.white_balance_auto.writable if caps else False
         )
@@ -158,30 +182,6 @@ class ControlsPanel(QGroupBox):
         )
         self.binning.setEnabled(usable and has_binning and not roi_on)
         self.apply_button.setEnabled(usable)
-
-    @staticmethod
-    def _numeric(name: str) -> QDoubleSpinBox:
-        spin = QDoubleSpinBox()
-        spin.setObjectName(name)
-        spin.setDecimals(3)
-        spin.setRange(-1_000_000_000, 1_000_000_000)
-        spin.setMinimumWidth(110)
-        spin.setMaximumWidth(180)
-        spin.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Fixed,
-        )
-        return spin
-
-    @staticmethod
-    def _configure_numeric(widget: QDoubleSpinBox, cap: NodeCapability) -> None:
-        if cap.minimum is not None and cap.maximum is not None:
-            widget.setRange(float(cap.minimum), float(cap.maximum))
-        widget.setSingleStep(float(cap.increment or 0.1))
-        if isinstance(cap.value, (int, float)) and not isinstance(cap.value, bool):
-            widget.setValue(float(cap.value))
-        if cap.unit:
-            widget.setSuffix(f" {cap.unit}")
 
     @staticmethod
     def _set_auto(widget: QCheckBox, cap: NodeCapability) -> None:

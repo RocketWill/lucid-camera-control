@@ -185,6 +185,7 @@ class MainWindow(QMainWindow):
         settings_scroll.setObjectName("settingsScrollArea")
         settings_scroll.setWidgetResizable(True)
         settings_scroll.setMinimumWidth(320)
+        settings_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         settings_scroll.setWidget(settings_content)
 
         imaging_layout = QVBoxLayout()
@@ -230,13 +231,18 @@ class MainWindow(QMainWindow):
             self.roi_panel.apply_button,
             self.roi_panel.full_frame_button,
             self.controls_panel.exposure_auto,
+            self.controls_panel.exposure_time_slider,
             self.controls_panel.exposure_time,
             self.controls_panel.gain_auto,
+            self.controls_panel.gain_slider,
             self.controls_panel.gain,
             self.controls_panel.frame_rate_enabled,
+            self.controls_panel.frame_rate_slider,
             self.controls_panel.frame_rate,
             self.controls_panel.gamma_enabled,
+            self.controls_panel.gamma_slider,
             self.controls_panel.gamma,
+            self.controls_panel.black_level_slider,
             self.controls_panel.black_level,
             self.controls_panel.white_balance_auto,
             self.controls_panel.binning,
@@ -255,6 +261,10 @@ class MainWindow(QMainWindow):
         )
         for current, following in zip(controls, controls[1:]):
             QWidget.setTabOrder(current, following)
+        QWidget.setTabOrder(
+            self.config_panel.apply_button,
+            self.preview_widget.start_button,
+        )
 
     def _explore(self) -> None:
         self.bridge.execute(ExploreCameras())
