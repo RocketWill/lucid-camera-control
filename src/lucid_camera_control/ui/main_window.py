@@ -41,6 +41,7 @@ from lucid_camera_control.ui.preview_bridge import FramePublisher, PreviewBridge
 from lucid_camera_control.ui.preview_widget import PreviewWidget
 from lucid_camera_control.ui.controls_panel import ControlsPanel
 from lucid_camera_control.ui.recording_panel import RecordingPanel
+from lucid_camera_control.ui.export_frames_dialog import ExportFramesDialog
 from lucid_camera_control.ui.config_panel import ConfigPanel
 from lucid_camera_control.media.recorder import RecorderService
 from lucid_camera_control.media.screenshot import ScreenshotService
@@ -155,6 +156,7 @@ class MainWindow(QMainWindow):
         self.recording_panel.open_recording_folder_requested.connect(
             lambda: self._open_folder(self._pending_config.recording_directory)
         )
+        self.recording_panel.export_frames_requested.connect(self._export_avi_frames)
         self.config_panel.import_requested.connect(self._import_config)
         self.config_panel.export_requested.connect(self._export_config)
         self.config_panel.apply_requested.connect(self._apply_imported_config)
@@ -258,6 +260,7 @@ class MainWindow(QMainWindow):
             self.recording_panel.stop_button,
             self.recording_panel.open_screenshot_folder_button,
             self.recording_panel.open_recording_folder_button,
+            self.recording_panel.export_frames_button,
         )
         for current, following in zip(controls, controls[1:]):
             QWidget.setTabOrder(current, following)
@@ -265,6 +268,10 @@ class MainWindow(QMainWindow):
             self.config_panel.apply_button,
             self.preview_widget.start_button,
         )
+
+    def _export_avi_frames(self) -> None:
+        dialog = ExportFramesDialog(self)
+        dialog.open()
 
     def _explore(self) -> None:
         self.bridge.execute(ExploreCameras())
