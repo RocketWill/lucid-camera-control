@@ -41,6 +41,19 @@ def frame(sequence: int, timestamp_ns: int, value: int) -> Frame:
     )
 
 
+def sized_frame(width: int, height: int) -> Frame:
+    return Frame(
+        1,
+        300_000_000,
+        None,
+        width,
+        height,
+        width,
+        "Mono8",
+        bytes(width * height),
+    )
+
+
 class PreviewIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.app = QApplication.instance() or QApplication([])
@@ -67,6 +80,25 @@ class PreviewIntegrationTests(unittest.TestCase):
         self.assertEqual(owned.data, original)
         self.assertIsNotNone(widget.image_label.pixmap())
         self.assertEqual(widget.fps_label.text(), "Receive FPS: 25.00")
+        widget.close()
+
+    def test_preview_fits_common_frame_ratios_without_cropping(self) -> None:
+        widget = PreviewWidget()
+        widget.resize(700, 500)
+        widget.show()
+        self.app.processEvents()
+
+        for source_width, source_height in ((640, 480), (160, 90)):
+            widget.show_frame(sized_frame(source_width, source_height), 30.0)
+            pixmap = widget.image_label.pixmap()
+            self.assertLessEqual(pixmap.width(), widget.image_label.width())
+            self.assertLessEqual(pixmap.height(), widget.image_label.height())
+            self.assertAlmostEqual(
+                pixmap.width() / pixmap.height(),
+                source_width / source_height,
+                delta=0.02,
+            )
+
         widget.close()
 
 
