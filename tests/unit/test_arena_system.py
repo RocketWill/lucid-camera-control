@@ -9,14 +9,30 @@ from lucid_camera_control.camera.arena_system import (
     CameraNotConnectedError,
     CameraNotFoundError,
 )
+from tests.unit.test_nodes import FakeNode, FakeNodeMap, InterfaceType
 
 
 class FakeDevice:
     def __init__(self) -> None:
         self.start_count = 0
         self.stop_count = 0
+        self.nodemap = FakeNodeMap(
+            {
+                "PixelFormat": FakeNode(
+                    InterfaceType.ENUMERATION,
+                    "Mono8",
+                    choices=("Mono8",),
+                ),
+                "AcquisitionMode": FakeNode(
+                    InterfaceType.ENUMERATION,
+                    "Continuous",
+                    choices=("Continuous",),
+                ),
+            }
+        )
+        self.tl_stream_nodemap = FakeNodeMap()
 
-    def start_stream(self) -> None:
+    def start_stream(self, count: int = 20) -> None:
         self.start_count += 1
 
     def stop_stream(self) -> None:
@@ -104,6 +120,16 @@ class ArenaCameraSystemTests(unittest.TestCase):
         adapter.close()
         adapter.close()
         self.assertEqual(system.device.start_count, 1)
+        self.assertEqual(system.device.stop_count, 1)
+        self.assertEqual(system.destroyed, [system.device])
+        self.assertFalse(adapter.is_connected)
+
+    def test_close_stops_an_active_stream_before_destroying_device(self) -> None:
+        system = FakeArenaSystem([lucid_info("100")])
+        adapter = ArenaCameraSystem(system)
+        adapter.connect("100")
+        adapter.start_stream()
+        adapter.close()
         self.assertEqual(system.device.stop_count, 1)
         self.assertEqual(system.destroyed, [system.device])
         self.assertFalse(adapter.is_connected)
