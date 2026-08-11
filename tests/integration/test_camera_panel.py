@@ -11,6 +11,11 @@ from PySide6.QtWidgets import QApplication
 
 from lucid_camera_control.application.controller import ApplicationController
 from lucid_camera_control.camera.models import CameraDescriptor
+from lucid_camera_control.camera.controls import (
+    CameraControlCapabilities,
+    CameraControlRequest,
+    CameraControlResult,
+)
 from lucid_camera_control.camera.nodes import NodeCapability, NodeKind
 from lucid_camera_control.camera.roi import (
     AppliedRoi,
@@ -71,6 +76,28 @@ class FakeCamera:
                 choices=("Mono8",),
             ),
         )
+
+    def control_capabilities(self) -> CameraControlCapabilities:
+        missing = lambda name: NodeCapability(
+            name, NodeKind.UNAVAILABLE, False, False, False
+        )
+        return CameraControlCapabilities(
+            missing("ExposureAuto"),
+            missing("ExposureTime"),
+            missing("GainAuto"),
+            missing("Gain"),
+            missing("AcquisitionFrameRateEnable"),
+            missing("AcquisitionFrameRate"),
+            missing("GammaEnable"),
+            missing("Gamma"),
+            missing("BlackLevel"),
+            missing("BalanceWhiteAuto"),
+            missing("BinningHorizontal"),
+            missing("BinningVertical"),
+        )
+
+    def apply_controls(self, request: CameraControlRequest) -> CameraControlResult:
+        return CameraControlResult(request, (), self.control_capabilities())
 
     def apply_roi(self, request: RoiRequest) -> RoiResult:
         self.last_roi_request = request

@@ -16,6 +16,7 @@ from lucid_camera_control.application.commands import (
     ConnectCamera,
     ExploreCameras,
     ApplyRoi,
+    ApplyCameraControls,
     StartStream,
     StopStream,
 )
@@ -26,6 +27,7 @@ from lucid_camera_control.ui.command_bridge import CommandBridge
 from lucid_camera_control.ui.roi_panel import RoiPanel
 from lucid_camera_control.ui.preview_bridge import FramePublisher, PreviewBridge
 from lucid_camera_control.ui.preview_widget import PreviewWidget
+from lucid_camera_control.ui.controls_panel import ControlsPanel
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +55,7 @@ class MainWindow(QMainWindow):
 
         self.camera_panel = CameraPanel()
         self.roi_panel = RoiPanel()
+        self.controls_panel = ControlsPanel()
         self.preview_widget = PreviewWidget()
         self.status_label = self.camera_panel.status_label
         self.explore_button = self.camera_panel.explore_button
@@ -63,6 +66,9 @@ class MainWindow(QMainWindow):
         self.roi_panel.apply_requested.connect(
             lambda request: self.bridge.execute(ApplyRoi(request))
         )
+        self.controls_panel.apply_requested.connect(
+            lambda request: self.bridge.execute(ApplyCameraControls(request))
+        )
         self.preview_widget.start_requested.connect(
             lambda: self.bridge.execute(StartStream())
         )
@@ -72,6 +78,7 @@ class MainWindow(QMainWindow):
         self.bridge.snapshot_changed.connect(self._on_snapshot)
         self.bridge.busy_changed.connect(self.camera_panel.set_busy)
         self.bridge.busy_changed.connect(self.roi_panel.set_busy)
+        self.bridge.busy_changed.connect(self.controls_panel.set_busy)
         self.bridge.busy_changed.connect(self.preview_widget.set_busy)
         self.bridge.command_failed.connect(self._show_error)
         if self.preview_bridge is not None:
@@ -82,6 +89,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(self.camera_panel)
         layout.addWidget(self.roi_panel)
+        layout.addWidget(self.controls_panel)
         layout.addWidget(self.preview_widget, stretch=1)
 
         central = QWidget()
@@ -102,6 +110,7 @@ class MainWindow(QMainWindow):
     def _on_snapshot(self, snapshot: object) -> None:
         self.camera_panel.apply_snapshot(snapshot, self.bridge.busy)
         self.roi_panel.apply_snapshot(snapshot, self.bridge.busy)
+        self.controls_panel.apply_snapshot(snapshot, self.bridge.busy)
         self.preview_widget.apply_snapshot(snapshot, self.bridge.busy)
 
     def _show_error(self, message: str) -> None:
