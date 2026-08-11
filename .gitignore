@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local environments and editor state
+.venv/
+.idea/
+.vscode/
+
+# Runtime output
+captures/
+recordings/
+logs/
+*.log
+
+# Internal engineering documents (not client-facing)
+AGENTS.md
+CLAUDE.md
+CONTEXT.md
+CONTEXT-MAP.md
+docs/agents/
+docs/adr/
+.scratch/
