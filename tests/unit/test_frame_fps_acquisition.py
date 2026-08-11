@@ -78,6 +78,29 @@ class FrameFpsAcquisitionTests(unittest.TestCase):
         worker.stop()
         self.assertEqual(str(errors[0]), "device lost")
 
+    def test_frame_listener_failure_is_recoverable(self) -> None:
+        errors: list[Exception] = []
+        delivered: list[int] = []
+        done = threading.Event()
+
+        def on_frame(value: Frame) -> None:
+            delivered.append(value.sequence)
+            if value.sequence == 1:
+                raise RuntimeError("display failed")
+            done.set()
+
+        worker = AcquisitionWorker(
+            ScriptedSource([frame(1), frame(2)]),
+            on_frame,
+            errors.append,
+            timeout_ms=1,
+        )
+        worker.start()
+        self.assertTrue(done.wait(1.0))
+        worker.stop()
+        self.assertEqual(delivered, [1, 2])
+        self.assertIsInstance(errors[0], RecoverableFrameError)
+
 
 if __name__ == "__main__":
     unittest.main()

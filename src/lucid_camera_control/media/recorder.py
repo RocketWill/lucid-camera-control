@@ -7,6 +7,7 @@ import queue
 import shutil
 import threading
 import time
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -21,6 +22,7 @@ from lucid_camera_control.media.frame import Frame
 
 GIB = 1024**3
 MIB = 1024**2
+logger = logging.getLogger(__name__)
 
 
 class RecordingBackend(Protocol):
@@ -150,6 +152,10 @@ class RecorderService:
                 self._status = self._replace_status(
                     dropped_frames=self._status.dropped_frames + 1
                 )
+                logger.warning(
+                    "recording_queue_drop dropped_frames=%d",
+                    self._status.dropped_frames,
+                )
             self._queue.put_nowait(frame)
 
     def start(self, *, fps: float = 30.0, serial_number: str = "camera") -> None:
@@ -167,6 +173,13 @@ class RecorderService:
         )
         path = self._available_path(f"{safe_serial}_{stamp}")
         self._backend.open(frame.width, frame.height, fps, path)
+        logger.info(
+            "recording_started path=%s width=%d height=%d fps=%.3f",
+            path,
+            frame.width,
+            frame.height,
+            fps,
+        )
         with self._lock:
             self._status = RecordingStatus(True, time.monotonic_ns(), output_path=path)
         self._worker = threading.Thread(
@@ -187,6 +200,13 @@ class RecorderService:
         self._backend.close()
         with self._lock:
             self._status = self._replace_status(output_path=self._backend.output_path)
+            logger.info(
+                "recording_finalized path=%s written=%d dropped=%d error=%s",
+                self._status.output_path,
+                self._status.frames_written,
+                self._status.dropped_frames,
+                self._status.error,
+            )
 
     def _run(self) -> None:
         try:

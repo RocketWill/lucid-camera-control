@@ -8,8 +8,11 @@ import sys
 from collections.abc import Sequence
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QStandardPaths
+from pathlib import Path
 
 from lucid_camera_control.ui.main_window import MainWindow
+from lucid_camera_control.diagnostics.logging import configure_logging
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +33,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     app = QApplication.instance() or QApplication([sys.argv[0]])
     app.setApplicationName("LUCID Camera Control")
     app.setOrganizationName("RocketWill")
+    configure_logging(
+        Path(
+            QStandardPaths.writableLocation(
+                QStandardPaths.StandardLocation.AppLocalDataLocation
+            )
+        )
+        / "logs"
+    )
 
     window = MainWindow()
     if args.smoke_test:
@@ -45,4 +56,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

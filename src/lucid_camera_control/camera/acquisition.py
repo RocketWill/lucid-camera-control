@@ -74,4 +74,8 @@ class AcquisitionWorker:
             try:
                 self._on_frame(frame)
             except Exception as exc:
-                self._on_error(exc)
+                self._on_error(
+                    RecoverableFrameError(
+                        f"Frame listener failed: {str(exc) or type(exc).__name__}"
+                    )
+                )
