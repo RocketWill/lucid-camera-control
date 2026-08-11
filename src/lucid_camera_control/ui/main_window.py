@@ -16,21 +16,34 @@ from lucid_camera_control.application.commands import (
     ConnectCamera,
     ExploreCameras,
     ApplyRoi,
+    StartStream,
+    StopStream,
 )
 from lucid_camera_control.application.controller import ApplicationController
 from lucid_camera_control.camera.arena_system import ArenaCameraSystem
 from lucid_camera_control.ui.camera_panel import CameraPanel
 from lucid_camera_control.ui.command_bridge import CommandBridge
 from lucid_camera_control.ui.roi_panel import RoiPanel
+from lucid_camera_control.ui.preview_bridge import FramePublisher, PreviewBridge
+from lucid_camera_control.ui.preview_widget import PreviewWidget
 
 
 class MainWindow(QMainWindow):
     """Minimal shell expanded by later implementation tickets."""
 
-    def __init__(self, controller: ApplicationController | None = None) -> None:
+    def __init__(
+        self,
+        controller: ApplicationController | None = None,
+        frame_source: FramePublisher | None = None,
+    ) -> None:
         super().__init__()
-        self.controller = controller or ApplicationController(ArenaCameraSystem())
+        if controller is None:
+            arena_camera = ArenaCameraSystem()
+            controller = ApplicationController(arena_camera)
+            frame_source = arena_camera
+        self.controller = controller
         self.bridge = CommandBridge(self.controller)
+        self.preview_bridge = PreviewBridge(frame_source) if frame_source else None
         self.setWindowTitle("LUCID Camera Control")
         self.resize(1100, 720)
 
@@ -40,6 +53,7 @@ class MainWindow(QMainWindow):
 
         self.camera_panel = CameraPanel()
         self.roi_panel = RoiPanel()
+        self.preview_widget = PreviewWidget()
         self.status_label = self.camera_panel.status_label
         self.explore_button = self.camera_panel.explore_button
 
@@ -49,21 +63,26 @@ class MainWindow(QMainWindow):
         self.roi_panel.apply_requested.connect(
             lambda request: self.bridge.execute(ApplyRoi(request))
         )
+        self.preview_widget.start_requested.connect(
+            lambda: self.bridge.execute(StartStream())
+        )
+        self.preview_widget.stop_requested.connect(
+            lambda: self.bridge.execute(StopStream())
+        )
         self.bridge.snapshot_changed.connect(self._on_snapshot)
         self.bridge.busy_changed.connect(self.camera_panel.set_busy)
         self.bridge.busy_changed.connect(self.roi_panel.set_busy)
+        self.bridge.busy_changed.connect(self.preview_widget.set_busy)
         self.bridge.command_failed.connect(self._show_error)
-
-        placeholder = QLabel("Connect a camera to begin.")
-        placeholder.setObjectName("previewPlaceholder")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setMinimumSize(640, 360)
+        if self.preview_bridge is not None:
+            self.preview_bridge.frame_arrived.connect(self.preview_widget.show_frame)
+            self.preview_bridge.acquisition_failed.connect(self._show_error)
 
         layout = QVBoxLayout()
         layout.addWidget(title)
         layout.addWidget(self.camera_panel)
         layout.addWidget(self.roi_panel)
-        layout.addWidget(placeholder, stretch=1)
+        layout.addWidget(self.preview_widget, stretch=1)
 
         central = QWidget()
         central.setLayout(layout)
@@ -83,6 +102,7 @@ class MainWindow(QMainWindow):
     def _on_snapshot(self, snapshot: object) -> None:
         self.camera_panel.apply_snapshot(snapshot, self.bridge.busy)
         self.roi_panel.apply_snapshot(snapshot, self.bridge.busy)
+        self.preview_widget.apply_snapshot(snapshot, self.bridge.busy)
 
     def _show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Camera operation failed", message)
