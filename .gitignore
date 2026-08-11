@@ -16,6 +16,7 @@ captures/
 recordings/
 logs/
 *.log
+/persist.json
 
 # Internal engineering documents (not client-facing)
 AGENTS.md
