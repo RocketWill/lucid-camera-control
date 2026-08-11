@@ -13,6 +13,12 @@ from lucid_camera_control.camera.nodes import (
     NodeCapability,
     NodeWriteResult,
 )
+from lucid_camera_control.camera.roi import (
+    RoiCapabilities,
+    RoiRequest,
+    RoiResult,
+    RoiTransaction,
+)
 
 
 class ArenaSystemLike(Protocol):
@@ -118,6 +124,12 @@ class ArenaCameraSystem:
 
     def write_boolean_node(self, name: str, value: bool) -> NodeWriteResult:
         return self._node_accessor().write_boolean(name, value)
+
+    def roi_capabilities(self) -> RoiCapabilities:
+        return RoiTransaction(self._node_accessor()).capabilities()
+
+    def apply_roi(self, request: RoiRequest) -> RoiResult:
+        return RoiTransaction(self._node_accessor()).apply(request)
 
     def _require_device(self) -> Any:
         if self._device is None:
