@@ -12,6 +12,12 @@ from arena_api.system import system as arena_system
 
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.acquisition import AcquisitionWorker, RecoverableFrameError
+from lucid_camera_control.camera.controls import (
+    CameraControlCapabilities,
+    CameraControlRequest,
+    CameraControlResult,
+    CameraControls,
+)
 from lucid_camera_control.camera.nodes import (
     NodeAccessor,
     NodeCapability,
@@ -226,6 +232,12 @@ class ArenaCameraSystem:
 
     def apply_roi(self, request: RoiRequest) -> RoiResult:
         return RoiTransaction(self._node_accessor()).apply(request)
+
+    def control_capabilities(self) -> CameraControlCapabilities:
+        return CameraControls(self._node_accessor()).capabilities()
+
+    def apply_controls(self, request: CameraControlRequest) -> CameraControlResult:
+        return CameraControls(self._node_accessor()).apply(request)
 
     def _require_device(self) -> Any:
         if self._device is None:

@@ -8,6 +8,7 @@ from typing import TypeAlias
 from lucid_camera_control.application.state import CameraState, ErrorInfo
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.roi import RoiResult
+from lucid_camera_control.camera.controls import CameraControlResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,4 +32,15 @@ class RoiApplied:
     result: RoiResult
 
 
-ApplicationEvent: TypeAlias = CamerasDiscovered | StateChanged | OperationFailed | RoiApplied
+@dataclass(frozen=True, slots=True)
+class CameraControlsApplied:
+    result: CameraControlResult
+
+
+ApplicationEvent: TypeAlias = (
+    CamerasDiscovered
+    | StateChanged
+    | OperationFailed
+    | RoiApplied
+    | CameraControlsApplied
+)

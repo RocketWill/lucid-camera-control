@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from lucid_camera_control.camera.roi import RoiRequest
+from lucid_camera_control.camera.controls import CameraControlRequest
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,11 @@ class ApplyRoi:
     request: RoiRequest
 
 
+@dataclass(frozen=True, slots=True)
+class ApplyCameraControls:
+    request: CameraControlRequest
+
+
 ApplicationCommand: TypeAlias = (
     ExploreCameras
     | ConnectCamera
@@ -57,4 +63,5 @@ ApplicationCommand: TypeAlias = (
     | StartRecording
     | StopRecording
     | ApplyRoi
+    | ApplyCameraControls
 )

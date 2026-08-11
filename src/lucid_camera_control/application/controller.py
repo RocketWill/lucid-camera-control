@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from lucid_camera_control.application.commands import (
     ApplicationCommand,
+    ApplyCameraControls,
     ApplyRoi,
     CloseCamera,
     ConnectCamera,
@@ -18,6 +19,7 @@ from lucid_camera_control.application.commands import (
 )
 from lucid_camera_control.application.events import (
     ApplicationEvent,
+    CameraControlsApplied,
     CamerasDiscovered,
     OperationFailed,
     RoiApplied,
@@ -96,6 +98,8 @@ class ApplicationController:
                 return self._stop_recording()
             case ApplyRoi(request=request):
                 return self._apply_roi(request)
+            case ApplyCameraControls(request=request):
+                return self._apply_controls(request)
         raise TypeError(f"Unsupported command: {type(command).__name__}")
 
     def _explore(self) -> tuple[ApplicationEvent, ...]:
@@ -113,6 +117,7 @@ class ApplicationController:
         descriptor = self._camera.connect(serial_number)
         try:
             roi_capabilities = self._camera.roi_capabilities()
+            control_capabilities = self._camera.control_capabilities()
         except Exception:
             self._camera.close()
             raise
@@ -123,6 +128,8 @@ class ApplicationController:
             active_camera=descriptor,
             roi_capabilities=roi_capabilities,
             roi_result=None,
+            control_capabilities=control_capabilities,
+            control_result=None,
             last_error=None,
         )
         return (StateChanged(previous, CameraState.CONNECTED),)
@@ -150,6 +157,8 @@ class ApplicationController:
             active_camera=None,
             roi_capabilities=None,
             roi_result=None,
+            control_capabilities=None,
+            control_result=None,
             last_error=error,
         )
         events: list[ApplicationEvent] = [
@@ -193,6 +202,13 @@ class ApplicationController:
                 "ApplyRoi requires Connected or Streaming; "
                 f"current state is {self._snapshot.state.value}"
             )
+        binning = self._snapshot.control_capabilities
+        if (
+            request.enabled
+            and binning is not None
+            and int(binning.binning_horizontal.value or 1) > 1
+        ):
+            raise InvalidTransitionError("Hardware ROI requires 1x1 binning")
         was_streaming = self._snapshot.state is CameraState.STREAMING
         if was_streaming:
             self._camera.stop_stream()
@@ -211,6 +227,44 @@ class ApplicationController:
             last_error=None,
         )
         return (RoiApplied(result),)
+
+    def _apply_controls(self, request: object) -> tuple[ApplicationEvent, ...]:
+        from lucid_camera_control.camera.controls import CameraControlRequest
+
+        if not isinstance(request, CameraControlRequest):
+            raise TypeError("ApplyCameraControls requires CameraControlRequest")
+        if self._snapshot.state not in (CameraState.CONNECTED, CameraState.STREAMING):
+            raise InvalidTransitionError(
+                "ApplyCameraControls requires Connected or Streaming; "
+                f"current state is {self._snapshot.state.value}"
+            )
+        if (
+            request.binning is not None
+            and request.binning > 1
+            and self._snapshot.roi_result is not None
+            and self._snapshot.roi_result.applied.enabled
+        ):
+            raise InvalidTransitionError("2x2 binning requires hardware ROI to be off")
+        was_streaming = self._snapshot.state is CameraState.STREAMING
+        if was_streaming:
+            self._camera.stop_stream()
+        try:
+            result = self._camera.apply_controls(request)
+            roi_capabilities = self._camera.roi_capabilities()
+            if was_streaming:
+                self._camera.start_stream()
+        except Exception:
+            if was_streaming:
+                self._snapshot = replace(self._snapshot, state=CameraState.CONNECTED)
+            raise
+        self._snapshot = replace(
+            self._snapshot,
+            control_capabilities=result.capabilities,
+            control_result=result,
+            roi_capabilities=roi_capabilities,
+            last_error=None,
+        )
+        return (CameraControlsApplied(result),)
 
     def _transition(
         self,

@@ -7,6 +7,10 @@ from enum import StrEnum
 
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.roi import RoiCapabilities, RoiResult
+from lucid_camera_control.camera.controls import (
+    CameraControlCapabilities,
+    CameraControlResult,
+)
 
 
 class CameraState(StrEnum):
@@ -31,3 +35,5 @@ class ApplicationSnapshot:
     last_error: ErrorInfo | None = None
     roi_capabilities: RoiCapabilities | None = None
     roi_result: RoiResult | None = None
+    control_capabilities: CameraControlCapabilities | None = None
+    control_result: CameraControlResult | None = None
