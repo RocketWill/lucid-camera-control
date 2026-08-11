@@ -41,6 +41,15 @@ class CameraPanel(QWidget):
         value = self.camera_combo.currentData()
         return str(value) if value else None
 
+    def select_serial(self, serial_number: str | None) -> bool:
+        if not serial_number:
+            return False
+        index = self.camera_combo.findData(serial_number)
+        if index < 0:
+            return False
+        self.camera_combo.setCurrentIndex(index)
+        return True
+
     def apply_snapshot(self, snapshot: ApplicationSnapshot, busy: bool) -> None:
         self._snapshot = snapshot
         self._busy = busy
