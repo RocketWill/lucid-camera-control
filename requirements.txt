@@ -1,0 +1,6 @@
+arena-api==2.8.2
+numpy==2.4.4
+opencv-python==4.11.0.86
+pydantic==2.13.0
+PySide6==6.11.1
+

@@ -10,4 +10,27 @@ The application must run with the existing `conda e2` environment. Production de
 
 ## Status
 
-Requirements and technical design are in progress.
+PRD and technical design are approved. Implementation is in progress.
+
+## Development setup
+
+LUCID Arena SDK and the `conda e2` environment must already be installed.
+
+```powershell
+conda run -n e2 python -m pip install --no-build-isolation --no-deps -e .
+```
+
+The editable install registers only this local project and does not download or upgrade dependencies.
+
+## Run
+
+```powershell
+conda run -n e2 python -m lucid_camera_control
+```
+
+## Verify
+
+```powershell
+conda run -n e2 python -m unittest discover -s tests -v
+conda run -n e2 python -m lucid_camera_control --smoke-test
+```
