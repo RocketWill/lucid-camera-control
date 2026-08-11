@@ -11,6 +11,7 @@ from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.roi import RoiResult
 from lucid_camera_control.camera.controls import CameraControlResult
 from lucid_camera_control.config.models import AppConfigV1
+from lucid_camera_control.camera.reset import FactoryResetResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,11 @@ class ConfigurationApplied:
     controls_result: CameraControlResult
 
 
+@dataclass(frozen=True, slots=True)
+class FactoryDefaultsLoaded:
+    result: FactoryResetResult
+
+
 ApplicationEvent: TypeAlias = (
     CamerasDiscovered
     | StateChanged
@@ -59,4 +65,5 @@ ApplicationEvent: TypeAlias = (
     | CameraControlsApplied
     | ScreenshotSaved
     | ConfigurationApplied
+    | FactoryDefaultsLoaded
 )

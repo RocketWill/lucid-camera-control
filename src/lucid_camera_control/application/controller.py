@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+import logging
 
 from lucid_camera_control.application.commands import (
     ApplicationCommand,
     ApplyCameraControls,
     ApplyConfiguration,
     CaptureScreenshot,
+    ResetFactoryDefaults,
+    HandleDeviceLoss,
     ApplyRoi,
     CloseCamera,
     ConnectCamera,
@@ -24,6 +27,7 @@ from lucid_camera_control.application.events import (
     CameraControlsApplied,
     ScreenshotSaved,
     ConfigurationApplied,
+    FactoryDefaultsLoaded,
     CamerasDiscovered,
     OperationFailed,
     RoiApplied,
@@ -43,6 +47,8 @@ from lucid_camera_control.camera.interface import (
 )
 
 EventListener = Callable[[ApplicationEvent, ApplicationSnapshot], None]
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class InvalidTransitionError(RuntimeError):
@@ -83,6 +89,7 @@ class ApplicationController:
         except InvalidTransitionError:
             raise
         except Exception as exc:
+            logger.exception("operation_failed operation=%s", type(command).__name__)
             error = ErrorInfo(type(command).__name__, str(exc) or type(exc).__name__)
             self._snapshot = replace(self._snapshot, last_error=error)
             events = (OperationFailed(error),)
@@ -90,6 +97,12 @@ class ApplicationController:
         for event in events:
             for listener in tuple(self._listeners):
                 listener(event, self._snapshot)
+        logger.info(
+            "command_completed operation=%s state=%s events=%s",
+            type(command).__name__,
+            self._snapshot.state.value,
+            ",".join(type(event).__name__ for event in events),
+        )
         return events
 
     def _dispatch(self, command: ApplicationCommand) -> tuple[ApplicationEvent, ...]:
@@ -116,6 +129,10 @@ class ApplicationController:
                 return self._capture_screenshot()
             case ApplyConfiguration(config=config):
                 return self._apply_configuration(config)
+            case ResetFactoryDefaults():
+                return self._factory_reset()
+            case HandleDeviceLoss(message=message):
+                return self._handle_device_loss(message)
         raise TypeError(f"Unsupported command: {type(command).__name__}")
 
     def _explore(self) -> tuple[ApplicationEvent, ...]:
@@ -360,6 +377,66 @@ class ApplicationController:
             binning=request.binning
             if caps.binning_horizontal.available and caps.binning_vertical.available
             else None,
+        )
+
+    def _factory_reset(self) -> tuple[ApplicationEvent, ...]:
+        previous = self._snapshot.state
+        if previous is CameraState.DISCONNECTED:
+            raise InvalidTransitionError("Factory reset requires a connected camera")
+        cleanup_errors: list[str] = []
+        if previous is CameraState.RECORDING:
+            self._attempt_cleanup(self._recorder.stop, cleanup_errors)
+        if previous in (CameraState.STREAMING, CameraState.RECORDING):
+            self._attempt_cleanup(self._camera.stop_stream, cleanup_errors)
+        if previous is not CameraState.CONNECTED:
+            self._snapshot = replace(self._snapshot, state=CameraState.CONNECTED)
+        if cleanup_errors:
+            raise RuntimeError("; ".join(cleanup_errors))
+        result = self._camera.factory_reset()
+        self._snapshot = replace(
+            self._snapshot,
+            state=CameraState.CONNECTED,
+            roi_capabilities=result.roi_capabilities,
+            roi_result=None,
+            control_capabilities=result.control_capabilities,
+            control_result=None,
+            applied_configuration=None,
+            last_error=None,
+        )
+        events: list[ApplicationEvent] = []
+        if previous is not CameraState.CONNECTED:
+            events.append(StateChanged(previous, CameraState.CONNECTED))
+        events.append(FactoryDefaultsLoaded(result))
+        return tuple(events)
+
+    def _handle_device_loss(self, message: str) -> tuple[ApplicationEvent, ...]:
+        previous = self._snapshot.state
+        if previous is CameraState.DISCONNECTED:
+            return ()
+        cleanup_errors: list[str] = []
+        if previous is CameraState.RECORDING:
+            self._attempt_cleanup(self._recorder.stop, cleanup_errors)
+        if previous in (CameraState.STREAMING, CameraState.RECORDING):
+            self._attempt_cleanup(self._camera.stop_stream, cleanup_errors)
+        self._attempt_cleanup(self._camera.close, cleanup_errors)
+        details = message
+        if cleanup_errors:
+            details += "; cleanup: " + "; ".join(cleanup_errors)
+        error = ErrorInfo("DeviceLost", details, recoverable=True)
+        self._snapshot = replace(
+            self._snapshot,
+            state=CameraState.DISCONNECTED,
+            active_camera=None,
+            roi_capabilities=None,
+            roi_result=None,
+            control_capabilities=None,
+            control_result=None,
+            applied_configuration=None,
+            last_error=error,
+        )
+        return (
+            StateChanged(previous, CameraState.DISCONNECTED),
+            OperationFailed(error),
         )
 
     def _transition(

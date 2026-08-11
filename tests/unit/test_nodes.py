@@ -17,6 +17,7 @@ class InterfaceType(Enum):
     FLOAT = 5
     STRING = 6
     ENUMERATION = 9
+    COMMAND = 10
 
 
 class FakeEntry:
@@ -48,6 +49,7 @@ class FakeNode:
         self.unit = unit
         self.enumentry_names = list(choices)
         self.enumentry_nodes = {choice: FakeEntry() for choice in choices}
+        self.execute_count = 0
 
     @property
     def value(self) -> object:
@@ -60,6 +62,11 @@ class FakeNode:
         if not self.is_writable:
             raise RuntimeError("not writable")
         self._value = value
+
+    def execute(self) -> None:
+        if not self.is_writable:
+            raise RuntimeError("not writable")
+        self.execute_count += 1
 
 
 class FakeNodeMap:
@@ -77,6 +84,13 @@ class NodeAccessorTests(unittest.TestCase):
         capability = NodeAccessor(FakeNodeMap()).snapshot("Missing")
         self.assertFalse(capability.available)
         self.assertEqual(capability.kind, NodeKind.UNAVAILABLE)
+
+    def test_command_executes_only_through_writable_command_node(self) -> None:
+        node = FakeNode(InterfaceType.COMMAND, None, readable=False)
+        NodeAccessor(FakeNodeMap({"UserSetLoad": node})).execute_command(
+            "UserSetLoad"
+        )
+        self.assertEqual(node.execute_count, 1)
 
     def test_unreadable_node_does_not_attempt_value_access(self) -> None:
         node = FakeNode(InterfaceType.INTEGER, 10, readable=False, minimum=0, maximum=20)

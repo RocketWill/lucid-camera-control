@@ -10,6 +10,8 @@ from lucid_camera_control.application.commands import (
     ApplyRoi,
     ApplyCameraControls,
     ApplyConfiguration,
+    ResetFactoryDefaults,
+    HandleDeviceLoss,
     CaptureScreenshot,
     ExploreCameras,
     StartRecording,
@@ -41,6 +43,7 @@ from lucid_camera_control.camera.roi import (
     RoiResult,
 )
 from lucid_camera_control.config.models import AppConfigV1, RoiConfig
+from lucid_camera_control.camera.reset import FactoryResetResult
 
 
 def fake_roi_capabilities() -> RoiCapabilities:
@@ -153,6 +156,12 @@ class FakeCamera:
         self._call("apply_controls")
         return CameraControlResult(
             request, (), fake_control_capabilities(request.binning or 1)
+        )
+
+    def factory_reset(self) -> FactoryResetResult:
+        self._call("factory_reset")
+        return FactoryResetResult(
+            fake_roi_capabilities(), fake_control_capabilities()
         )
 
 
@@ -333,6 +342,26 @@ class ApplicationControllerTests(unittest.TestCase):
             ["stop_stream", "apply_roi", "apply_controls", "start_stream"],
         )
         self.assertEqual(self.controller.snapshot.state, CameraState.STREAMING)
+
+    def test_factory_reset_finalizes_recording_and_remains_connected(self) -> None:
+        self.connect_and_stream()
+        self.controller.execute(StartRecording())
+        self.controller.execute(ResetFactoryDefaults())
+        self.assertEqual(self.controller.snapshot.state, CameraState.CONNECTED)
+        self.assertIsNone(self.controller.snapshot.roi_result)
+        self.assertEqual(
+            self.camera.calls[-2:],
+            ["stop_stream", "factory_reset"],
+        )
+        self.assertEqual(self.recorder.calls[-1], "stop")
+
+    def test_device_loss_cleans_up_and_allows_manual_reconnect(self) -> None:
+        self.connect_and_stream()
+        self.controller.execute(HandleDeviceLoss("transport disconnected"))
+        self.assertEqual(self.controller.snapshot.state, CameraState.DISCONNECTED)
+        self.assertEqual(self.controller.snapshot.last_error.operation, "DeviceLost")
+        self.controller.execute(ConnectCamera("ABC123"))
+        self.assertEqual(self.controller.snapshot.state, CameraState.CONNECTED)
 
 
 if __name__ == "__main__":
