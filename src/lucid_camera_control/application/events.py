@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TypeAlias
+from pathlib import Path
 
 from lucid_camera_control.application.state import CameraState, ErrorInfo
 from lucid_camera_control.camera.models import CameraDescriptor
@@ -37,10 +38,16 @@ class CameraControlsApplied:
     result: CameraControlResult
 
 
+@dataclass(frozen=True, slots=True)
+class ScreenshotSaved:
+    path: Path
+
+
 ApplicationEvent: TypeAlias = (
     CamerasDiscovered
     | StateChanged
     | OperationFailed
     | RoiApplied
     | CameraControlsApplied
+    | ScreenshotSaved
 )

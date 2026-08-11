@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Protocol
+from pathlib import Path
 
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.controls import (
@@ -46,7 +47,7 @@ class CameraPort(Protocol):
 class RecorderPort(Protocol):
     """Minimal recorder lifecycle needed by the application controller."""
 
-    def start(self) -> None: ...
+    def start(self, *, fps: float, serial_number: str) -> None: ...
 
     def stop(self) -> None: ...
 
@@ -54,8 +55,17 @@ class RecorderPort(Protocol):
 class NullRecorder:
     """Recorder placeholder used before the media implementation ticket."""
 
-    def start(self) -> None:
+    def start(self, *, fps: float, serial_number: str) -> None:
         return None
 
     def stop(self) -> None:
         return None
+
+
+class ScreenshotPort(Protocol):
+    def capture(self, serial_number: str) -> Path: ...
+
+
+class NullScreenshot:
+    def capture(self, serial_number: str) -> Path:
+        raise RuntimeError("Screenshot service is unavailable")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.roi import RoiCapabilities, RoiResult
@@ -37,3 +38,4 @@ class ApplicationSnapshot:
     roi_result: RoiResult | None = None
     control_capabilities: CameraControlCapabilities | None = None
     control_result: CameraControlResult | None = None
+    last_screenshot_path: Path | None = None
