@@ -8,6 +8,7 @@ from dataclasses import replace
 from lucid_camera_control.application.commands import (
     ApplicationCommand,
     ApplyCameraControls,
+    ApplyConfiguration,
     CaptureScreenshot,
     ApplyRoi,
     CloseCamera,
@@ -22,6 +23,7 @@ from lucid_camera_control.application.events import (
     ApplicationEvent,
     CameraControlsApplied,
     ScreenshotSaved,
+    ConfigurationApplied,
     CamerasDiscovered,
     OperationFailed,
     RoiApplied,
@@ -112,6 +114,8 @@ class ApplicationController:
                 return self._apply_controls(request)
             case CaptureScreenshot():
                 return self._capture_screenshot()
+            case ApplyConfiguration(config=config):
+                return self._apply_configuration(config)
         raise TypeError(f"Unsupported command: {type(command).__name__}")
 
     def _explore(self) -> tuple[ApplicationEvent, ...]:
@@ -242,6 +246,7 @@ class ApplicationController:
             self._snapshot,
             roi_capabilities=result.capabilities,
             roi_result=result,
+            applied_configuration=None,
             last_error=None,
         )
         return (RoiApplied(result),)
@@ -279,6 +284,7 @@ class ApplicationController:
             self._snapshot,
             control_capabilities=result.capabilities,
             control_result=result,
+            applied_configuration=None,
             roi_capabilities=roi_capabilities,
             last_error=None,
         )
@@ -300,6 +306,61 @@ class ApplicationController:
             last_error=None,
         )
         return (ScreenshotSaved(path),)
+
+    def _apply_configuration(self, config: object) -> tuple[ApplicationEvent, ...]:
+        from lucid_camera_control.config.models import AppConfigV1
+
+        if not isinstance(config, AppConfigV1):
+            raise TypeError("ApplyConfiguration requires validated AppConfigV1")
+        if self._snapshot.state not in (CameraState.CONNECTED, CameraState.STREAMING):
+            raise InvalidTransitionError(
+                "ApplyConfiguration requires Connected or Streaming; "
+                f"current state is {self._snapshot.state.value}"
+            )
+        controls_request = self._supported_control_request(config.controls.request())
+        was_streaming = self._snapshot.state is CameraState.STREAMING
+        if was_streaming:
+            self._camera.stop_stream()
+        try:
+            roi_result = self._camera.apply_roi(config.roi.request())
+            controls_result = self._camera.apply_controls(controls_request)
+            if was_streaming:
+                self._camera.start_stream()
+        except Exception:
+            if was_streaming:
+                self._snapshot = replace(self._snapshot, state=CameraState.CONNECTED)
+            raise
+        self._snapshot = replace(
+            self._snapshot,
+            roi_capabilities=roi_result.capabilities,
+            roi_result=roi_result,
+            control_capabilities=controls_result.capabilities,
+            control_result=controls_result,
+            applied_configuration=config,
+            last_error=None,
+        )
+        return (ConfigurationApplied(config, roi_result, controls_result),)
+
+    def _supported_control_request(self, request: object) -> object:
+        from lucid_camera_control.camera.controls import CameraControlRequest
+
+        if not isinstance(request, CameraControlRequest):
+            raise TypeError("CameraControlRequest required")
+        caps = self._snapshot.control_capabilities
+        if caps is None:
+            raise RuntimeError("Camera control capabilities are unavailable")
+        return replace(
+            request,
+            gamma_enabled=request.gamma_enabled if caps.gamma_enable.available else None,
+            gamma=request.gamma if caps.gamma.available else None,
+            black_level=request.black_level if caps.black_level.available else None,
+            white_balance_auto=request.white_balance_auto
+            if caps.white_balance_auto.available
+            else None,
+            binning=request.binning
+            if caps.binning_horizontal.available and caps.binning_vertical.available
+            else None,
+        )
 
     def _transition(
         self,

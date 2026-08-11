@@ -10,6 +10,7 @@ from lucid_camera_control.application.state import CameraState, ErrorInfo
 from lucid_camera_control.camera.models import CameraDescriptor
 from lucid_camera_control.camera.roi import RoiResult
 from lucid_camera_control.camera.controls import CameraControlResult
+from lucid_camera_control.config.models import AppConfigV1
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +44,13 @@ class ScreenshotSaved:
     path: Path
 
 
+@dataclass(frozen=True, slots=True)
+class ConfigurationApplied:
+    config: AppConfigV1
+    roi_result: RoiResult
+    controls_result: CameraControlResult
+
+
 ApplicationEvent: TypeAlias = (
     CamerasDiscovered
     | StateChanged
@@ -50,4 +58,5 @@ ApplicationEvent: TypeAlias = (
     | RoiApplied
     | CameraControlsApplied
     | ScreenshotSaved
+    | ConfigurationApplied
 )

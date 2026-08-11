@@ -9,6 +9,7 @@ from lucid_camera_control.application.commands import (
     ConnectCamera,
     ApplyRoi,
     ApplyCameraControls,
+    ApplyConfiguration,
     CaptureScreenshot,
     ExploreCameras,
     StartRecording,
@@ -39,6 +40,7 @@ from lucid_camera_control.camera.roi import (
     RoiRequest,
     RoiResult,
 )
+from lucid_camera_control.config.models import AppConfigV1, RoiConfig
 
 
 def fake_roi_capabilities() -> RoiCapabilities:
@@ -319,6 +321,18 @@ class ApplicationControllerTests(unittest.TestCase):
             self.controller.snapshot.last_screenshot_path,
             Path("ABC123_capture.png"),
         )
+
+    def test_validated_configuration_stops_once_applies_and_restarts(self) -> None:
+        self.connect_and_stream()
+        config = AppConfigV1(
+            roi=RoiConfig(enabled=True, width=1024, height=768)
+        )
+        self.controller.execute(ApplyConfiguration(config))
+        self.assertEqual(
+            self.camera.calls[-4:],
+            ["stop_stream", "apply_roi", "apply_controls", "start_stream"],
+        )
+        self.assertEqual(self.controller.snapshot.state, CameraState.STREAMING)
 
 
 if __name__ == "__main__":

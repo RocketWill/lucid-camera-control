@@ -7,6 +7,7 @@ from typing import TypeAlias
 
 from lucid_camera_control.camera.roi import RoiRequest
 from lucid_camera_control.camera.controls import CameraControlRequest
+from lucid_camera_control.config.models import AppConfigV1
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,11 @@ class ApplyCameraControls:
     request: CameraControlRequest
 
 
+@dataclass(frozen=True, slots=True)
+class ApplyConfiguration:
+    config: AppConfigV1
+
+
 ApplicationCommand: TypeAlias = (
     ExploreCameras
     | ConnectCamera
@@ -70,4 +76,5 @@ ApplicationCommand: TypeAlias = (
     | CaptureScreenshot
     | ApplyRoi
     | ApplyCameraControls
+    | ApplyConfiguration
 )
