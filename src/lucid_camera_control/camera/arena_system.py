@@ -8,6 +8,11 @@ from typing import Any, Protocol
 from arena_api.system import system as arena_system
 
 from lucid_camera_control.camera.models import CameraDescriptor
+from lucid_camera_control.camera.nodes import (
+    NodeAccessor,
+    NodeCapability,
+    NodeWriteResult,
+)
 
 
 class ArenaSystemLike(Protocol):
@@ -99,10 +104,28 @@ class ArenaCameraSystem:
     def stop_stream(self) -> None:
         self._require_device().stop_stream()
 
+    def node_capability(self, name: str) -> NodeCapability:
+        return self._node_accessor().snapshot(name)
+
+    def node_capabilities(self, names: tuple[str, ...]) -> tuple[NodeCapability, ...]:
+        return self._node_accessor().snapshot_many(names)
+
+    def write_numeric_node(self, name: str, value: int | float) -> NodeWriteResult:
+        return self._node_accessor().write_numeric(name, value)
+
+    def write_enumeration_node(self, name: str, value: str) -> NodeWriteResult:
+        return self._node_accessor().write_enumeration(name, value)
+
+    def write_boolean_node(self, name: str, value: bool) -> NodeWriteResult:
+        return self._node_accessor().write_boolean(name, value)
+
     def _require_device(self) -> Any:
         if self._device is None:
             raise CameraNotConnectedError("No camera is connected")
         return self._device
+
+    def _node_accessor(self) -> NodeAccessor:
+        return NodeAccessor(self._require_device().nodemap)
 
     @classmethod
     def _descriptor_from_info(
@@ -129,4 +152,3 @@ class ArenaCameraSystem:
             return None
         text = str(value).strip()
         return text or None
-
