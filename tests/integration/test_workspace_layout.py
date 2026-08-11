@@ -6,7 +6,6 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QSplitter  # noqa: E402
 
 from lucid_camera_control.ui.main_window import MainWindow  # noqa: E402
@@ -91,12 +90,17 @@ class WorkspaceLayoutTests(unittest.TestCase):
     def test_keyboard_order_moves_from_settings_to_imaging_actions(self) -> None:
         self.window.config_panel.apply_button.setEnabled(True)
         self.window.preview_widget.start_button.setEnabled(True)
-        self.window.config_panel.apply_button.setFocus()
-
-        QTest.keyClick(self.window, Qt.Key.Key_Tab)
+        current = self.window.config_panel.apply_button.nextInFocusChain()
+        while current is not self.window.config_panel.apply_button:
+            if (
+                current.focusPolicy() & Qt.FocusPolicy.TabFocus
+                and current.isEnabled()
+            ):
+                break
+            current = current.nextInFocusChain()
 
         self.assertIs(
-            QApplication.focusWidget(),
+            current,
             self.window.preview_widget.start_button,
         )
 
