@@ -15,11 +15,13 @@ from lucid_camera_control.application.commands import (
     CloseCamera,
     ConnectCamera,
     ExploreCameras,
+    ApplyRoi,
 )
 from lucid_camera_control.application.controller import ApplicationController
 from lucid_camera_control.camera.arena_system import ArenaCameraSystem
 from lucid_camera_control.ui.camera_panel import CameraPanel
 from lucid_camera_control.ui.command_bridge import CommandBridge
+from lucid_camera_control.ui.roi_panel import RoiPanel
 
 
 class MainWindow(QMainWindow):
@@ -37,14 +39,19 @@ class MainWindow(QMainWindow):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.camera_panel = CameraPanel()
+        self.roi_panel = RoiPanel()
         self.status_label = self.camera_panel.status_label
         self.explore_button = self.camera_panel.explore_button
 
         self.camera_panel.explore_button.clicked.connect(self._explore)
         self.camera_panel.connect_button.clicked.connect(self._connect)
         self.camera_panel.close_button.clicked.connect(self._close_camera)
+        self.roi_panel.apply_requested.connect(
+            lambda request: self.bridge.execute(ApplyRoi(request))
+        )
         self.bridge.snapshot_changed.connect(self._on_snapshot)
         self.bridge.busy_changed.connect(self.camera_panel.set_busy)
+        self.bridge.busy_changed.connect(self.roi_panel.set_busy)
         self.bridge.command_failed.connect(self._show_error)
 
         placeholder = QLabel("Connect a camera to begin.")
@@ -55,6 +62,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.addWidget(title)
         layout.addWidget(self.camera_panel)
+        layout.addWidget(self.roi_panel)
         layout.addWidget(placeholder, stretch=1)
 
         central = QWidget()
@@ -74,6 +82,7 @@ class MainWindow(QMainWindow):
 
     def _on_snapshot(self, snapshot: object) -> None:
         self.camera_panel.apply_snapshot(snapshot, self.bridge.busy)
+        self.roi_panel.apply_snapshot(snapshot, self.bridge.busy)
 
     def _show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Camera operation failed", message)
