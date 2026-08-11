@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QGridLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from lucid_camera_control.application.state import ApplicationSnapshot, CameraState
 
@@ -21,20 +28,27 @@ class CameraPanel(QWidget):
         self.explore_button.setObjectName("exploreCamerasButton")
         self.connect_button = QPushButton("Connect")
         self.connect_button.setObjectName("connectCameraButton")
-        self.close_button = QPushButton("Close Camera")
+        self.close_button = QPushButton("Close")
         self.close_button.setObjectName("closeCameraButton")
         self.reset_button = QPushButton("Factory Reset")
         self.reset_button.setObjectName("factoryResetButton")
 
-        layout = QGridLayout(self)
-        layout.addWidget(QLabel("Status"), 0, 0)
-        layout.addWidget(self.status_label, 0, 1)
-        layout.addWidget(QLabel("Camera"), 1, 0)
-        layout.addWidget(self.camera_combo, 1, 1)
-        layout.addWidget(self.explore_button, 1, 2)
-        layout.addWidget(self.connect_button, 1, 3)
-        layout.addWidget(self.close_button, 1, 4)
-        layout.addWidget(self.reset_button, 1, 5)
+        status_row = QHBoxLayout()
+        status_row.addWidget(QLabel("Status"))
+        status_row.addWidget(self.status_label)
+        status_row.addStretch(1)
+        connect_row = QHBoxLayout()
+        connect_row.addWidget(self.explore_button)
+        connect_row.addWidget(self.connect_button)
+        close_row = QHBoxLayout()
+        close_row.addWidget(self.close_button)
+        close_row.addWidget(self.reset_button)
+        layout = QVBoxLayout(self)
+        layout.addLayout(status_row)
+        layout.addWidget(QLabel("Camera"))
+        layout.addWidget(self.camera_combo)
+        layout.addLayout(connect_row)
+        layout.addLayout(close_row)
 
         self.apply_snapshot(ApplicationSnapshot(), busy=False)
         self.camera_combo.currentIndexChanged.connect(self._refresh_buttons)

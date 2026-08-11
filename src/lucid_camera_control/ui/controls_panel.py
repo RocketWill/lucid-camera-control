@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
 )
 
@@ -24,16 +25,16 @@ class ControlsPanel(QGroupBox):
 
     def __init__(self) -> None:
         super().__init__("Camera Controls")
-        self.exposure_auto = QCheckBox("Continuous auto exposure")
+        self.exposure_auto = QCheckBox("Auto")
         self.exposure_time = self._numeric("exposureTimeSpinBox")
-        self.gain_auto = QCheckBox("Continuous auto gain")
+        self.gain_auto = QCheckBox("Auto")
         self.gain = self._numeric("gainSpinBox")
-        self.frame_rate_enabled = QCheckBox("Limit acquisition frame rate")
+        self.frame_rate_enabled = QCheckBox("Enabled")
         self.frame_rate = self._numeric("frameRateSpinBox")
-        self.gamma_enabled = QCheckBox("Enable gamma")
+        self.gamma_enabled = QCheckBox("Enabled")
         self.gamma = self._numeric("gammaSpinBox")
         self.black_level = self._numeric("blackLevelSpinBox")
-        self.white_balance_auto = QCheckBox("Continuous auto white balance")
+        self.white_balance_auto = QCheckBox("Auto")
         self.binning = QComboBox()
         self.binning.addItem("1 x 1", 1)
         self.binning.addItem("2 x 2", 2)
@@ -47,7 +48,7 @@ class ControlsPanel(QGroupBox):
         self.form.addRow("Exposure time", self.exposure_time)
         self.form.addRow("Gain mode", self.gain_auto)
         self.form.addRow("Gain", self.gain)
-        self.form.addRow("Frame-rate control", self.frame_rate_enabled)
+        self.form.addRow("Frame-rate limit", self.frame_rate_enabled)
         self.form.addRow("Frame rate", self.frame_rate)
         self.form.addRow("Gamma mode", self.gamma_enabled)
         self.form.addRow("Gamma", self.gamma)
@@ -164,6 +165,12 @@ class ControlsPanel(QGroupBox):
         spin.setObjectName(name)
         spin.setDecimals(3)
         spin.setRange(-1_000_000_000, 1_000_000_000)
+        spin.setMinimumWidth(110)
+        spin.setMaximumWidth(180)
+        spin.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
         return spin
 
     @staticmethod

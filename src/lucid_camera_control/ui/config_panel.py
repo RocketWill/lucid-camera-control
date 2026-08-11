@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 
 from lucid_camera_control.application.state import ApplicationSnapshot, CameraState
 
@@ -17,15 +24,20 @@ class ConfigPanel(QGroupBox):
         super().__init__("JSON Configuration")
         self.import_button = QPushButton("Import JSON")
         self.export_button = QPushButton("Export JSON")
-        self.apply_button = QPushButton("Apply Imported Camera Settings")
+        self.apply_button = QPushButton("Apply Camera Settings")
         self.status_label = QLabel("No configuration imported in this session.")
         self.status_label.setWordWrap(True)
+        self.status_label.setMinimumWidth(0)
+        self.status_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         buttons = QHBoxLayout()
         buttons.addWidget(self.import_button)
         buttons.addWidget(self.export_button)
-        buttons.addWidget(self.apply_button)
         layout = QVBoxLayout(self)
         layout.addLayout(buttons)
+        layout.addWidget(self.apply_button)
         layout.addWidget(self.status_label)
         self._snapshot = ApplicationSnapshot()
         self._busy = False
