@@ -3,7 +3,8 @@
 LUCID Camera Control is a standalone Windows desktop application for one
 Arena-compatible LUCID camera at a time. It uses the LUCID Arena SDK through
 Python and provides camera-side ROI, live preview, image controls, PNG capture,
-Raw AVI recording, JSON configuration, and factory reset from an English UI.
+Raw AVI recording, offline AVI-to-BMP frame export, JSON configuration, and
+factory reset from an English UI.
 
 The application was developed and tested with a `TRI032S-C` running firmware
 `1.69.0.0`. Other Arena-compatible LUCID models are discovered through their
@@ -26,6 +27,7 @@ was physically available during final acceptance.
   required nodes.
 - Save lossless PNG files from the latest owned acquisition frame.
 - Record Raw BGR8 AVI through a bounded disk-writing queue.
+- Export all or sampled frames from an existing AVI as uncompressed BMP files.
 - Import and export validated schema-v1 JSON configuration.
 - Load the last application preferences on the next launch.
 - Restore the camera's Default UserSet after explicit confirmation.
@@ -151,6 +153,11 @@ conda run -n e2 lucid-camera-control
 6. Stop recording before changing settings that affect frame dimensions.
 7. Stop preview and close the camera when acquisition is finished.
 
+Existing AVI files can also be exported while no camera is connected. Select
+`Export AVI Frames...` under Media Output to open the export dialog. Frame
+export remains available during preview but is disabled while Raw AVI recording
+is active, preventing the two disk-writing workloads from competing.
+
 ROI changes and imported camera settings stop and restart preview when required.
 The UI disables commands that are not valid in the current state.
 
@@ -206,6 +213,43 @@ and preview continue.
 
 Some general media players do not support Raw BGR8 AVI. The acceptance files
 were reopened successfully through OpenCV.
+
+## Export AVI frames as BMP
+
+Select `Export AVI Frames...` under Media Output, then configure:
+
+1. Source AVI file.
+2. All frames or an inclusive start/end source-frame range.
+3. `Export every N frame(s)`; use `1` to export every selected frame.
+4. Output folder and existing-file behavior.
+
+The default existing-file policy creates a numbered output folder when the
+selected folder already contains files. The other policies skip matching BMP
+files or explicitly overwrite them. Overwrite requires confirmation.
+
+Output filenames preserve the zero-based source frame number, for example:
+
+```text
+capture_frame_000000.bmp
+capture_frame_000005.bmp
+capture_frame_000010.bmp
+```
+
+BMP output is uncompressed. BMP does not provide a general JPEG-style quality
+or compression-rate setting for decoded colour frames, so the dialog does not
+show a misleading compression slider. Exported images retain the decoded AVI
+dimensions and colour channels without preview contrast or resizing.
+
+The dialog shows AVI metadata, estimated file count and disk usage, progress,
+elapsed time, and an estimated remaining time for longer operations. `Cancel`
+stops after the current frame and retains completed BMP files. The completion
+summary reports exported, skipped, and failed files and can open the output
+folder.
+
+AVI metadata such as frame count and duration is an estimate supplied by the
+container. The final result is based on frames actually decoded. Codec support
+depends on the OpenCV video backend installed on the workstation; verify at
+least one Raw BGR8 AVI produced by Arena Recorder on each deployment system.
 
 ## JSON configuration
 
@@ -307,7 +351,7 @@ conda run -n e2 python -m lucid_camera_control --smoke-test
 git diff --check
 ```
 
-Final automated verification contains 69 tests. Hardware acceptance on the
+Final automated verification contains 90 tests. Hardware acceptance on the
 TRI032S-C covered repeated connect and close, ROI alignment, centered 1920x1080
 acquisition, PNG and Raw AVI dimensions, measured receive FPS, and Default
 UserSet reset.
@@ -322,3 +366,6 @@ UserSet reset.
 - No standalone EXE is included.
 - Final hardware acceptance used one TRI032S-C. A second LUCID model was not
   available for physical verification.
+- AVI-to-BMP export requires a codec supported by the workstation's OpenCV
+  backend. Automated tests cover MJPG AVI; the Arena Recorder Raw BGR8 AVI path
+  remains a deployment acceptance check.
